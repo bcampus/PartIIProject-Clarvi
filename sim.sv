@@ -39,7 +39,7 @@ module clarvi_sim();
     logic        main_write;
     logic [31:0] main_writedata;
     logic        main_waitrequest = 0;
-    logic        main_readdatavalid;
+    logic        main_readdatavalid = 1;
     logic [ADDR_WIDTH-1:0] instr_address;
     logic        instr_read;
     logic [31:0] instr_readdata;

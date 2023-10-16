@@ -19,14 +19,14 @@ ASP_OBJ_FILES := $(patsubst src/%.S,build/%.o,$(ASP_FILES))
 
 
 # settings for the compilers
-RISCV_PREFIX = riscv32-unknown-elf-
+RISCV_PREFIX = riscv64-unknown-elf-
 CC = $(RISCV_PREFIX)gcc
 LD = $(RISCV_PREFIX)ld
 OBJCOPY = $(RISCV_PREFIX)objcopy
 OBJDUMP = $(RISCV_PREFIX)objdump
 
-TARGET_ARCH = -m32 -march=RV32I
-CCFLAGS = -O0 $(TARGET_ARCH)
+TARGET_ARCH = -mabi=ilp32 -march=rv32i 
+CCFLAGS = -O3 $(TARGET_ARCH)
 
 # Lists of rules: the name of a file, followed by the files it depends on.
 # When typing 'make' not followed by a rule name, the first rule is followed.  This rule depends on
@@ -48,7 +48,7 @@ $(BUILD)/%.o: src/%.S
 
 # link with gcc
 $(BUILD)/$(PROJECT).elf: ${AS_OBJ_FILES} ${C_OBJ_FILES} ${ASP_OBJ_FILES}
-	$(CC) -o $@ $^ -T link.ld -lgcc -nostdlib
+	$(CC) -o $@ $^ -T link.ld -lgcc -nostdlib -Xlinker "-melf32lriscv"
 
 # build an elf executable
 $(BUILD)/$(PROJECT).dump: $(BUILD)/$(PROJECT).elf

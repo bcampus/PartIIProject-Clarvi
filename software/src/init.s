@@ -8,7 +8,7 @@ entry:
 
     la    t0, end       # on hardware, ECALL doesn't stop the CPU, so define
                         # a handler to catch the ECALL and spin
-    csrrw zero,0x305,t0 # set the address of the handler (CSR 0x305 is the trap handler base register)
+    #csrrw zero,0x305,t0 # set the address of the handler (CSR 0x305 is the trap handler base register)
 
     call  main          # call the main function
     ecall               # halt the simluation when it returns

@@ -62,7 +62,7 @@ Main memory can have arbitrary (>= 1 cycle) latency.
 
 `include "riscv.svh"
 
-`define MACHINE_MODE    // enable support for machine mode instructions, interrupts and exceptions
+//`define MACHINE_MODE    // enable support for machine mode instructions, interrupts and exceptions
 `define DEBUG           // enable debug outputs
 `ifdef MODEL_TECH
     `define SIMULATION  // enable simulation features
