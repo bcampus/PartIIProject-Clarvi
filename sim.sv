@@ -35,14 +35,14 @@ module clarvi_sim();
     logic [ADDR_WIDTH-1:0] main_address;
     logic [3:0]  main_byteenable;
     logic        main_read;
-    logic [31:0] main_readdata;
+    logic [63:0] main_readdata;
     logic        main_write;
-    logic [31:0] main_writedata;
+    logic [63:0] main_writedata;
     logic        main_waitrequest = 0;
     logic        main_readdatavalid = 1;
     logic [ADDR_WIDTH-1:0] instr_address;
     logic        instr_read;
-    logic [31:0] instr_readdata;
+    logic [63:0] instr_readdata;
     logic        instr_waitrequest = 0;
     logic        instr_readdatavalid = 1;
 
@@ -51,6 +51,7 @@ module clarvi_sim();
 
     dual_port_bram #(
         .ADDRESS_WIDTH(ADDR_WIDTH)
+        .BYTES_PER_WORD(8)
     ) mem (
         .clock,
         .reset,
@@ -120,9 +121,9 @@ module memory_debug #(
     input logic clock,
     input logic [ADDR_WIDTH-1:0] address,
     input logic read_enable,
-    input logic [31:0] read_data,
+    input logic [63:0] read_data,
     input logic write_enable,
-    input logic [31:0] write_data
+    input logic [63:0] write_data
 );
 
     always_ff @(posedge clock) begin

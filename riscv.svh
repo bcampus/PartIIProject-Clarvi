@@ -37,17 +37,21 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // RISC-V opcodes
 typedef enum logic [4:0] {
-    OPC_LUI      = 5'b01101,
-    OPC_AUIPC    = 5'b00101,
-    OPC_JAL      = 5'b11011,
-    OPC_JALR     = 5'b11001,
-    OPC_BRANCH   = 5'b11000,
-    OPC_LOAD     = 5'b00000,
-    OPC_STORE    = 5'b01000,
-    OPC_OP_IMM   = 5'b00100,
-    OPC_OP       = 5'b01100,
-    OPC_MISC_MEM = 5'b00011,
-    OPC_SYSTEM   = 5'b11100
+    OPC_LUI       = 5'b01101,
+    OPC_AUIPC     = 5'b00101,
+    OPC_JAL       = 5'b11011,
+    OPC_JALR      = 5'b11001,
+    OPC_BRANCH    = 5'b11000,
+    OPC_LOAD      = 5'b00000,
+    OPC_STORE     = 5'b01000,
+    OPC_OP_IMM    = 5'b00100,
+    OPC_OP        = 5'b01100,
+    OPC_MISC_MEM  = 5'b00011,
+    OPC_SYSTEM    = 5'b11100,
+//RV64I==============
+    OPC_OP_IMM_32 = 5'b00110,
+    OPC_OP_32     = 5'b01110
+//===================
 } opcode_t;
 
 
@@ -66,6 +70,8 @@ typedef enum logic [4:0] {
 } register_t;
 
 // internal, decoded opcodes
+// RV64I new instructions (OP-32, OP-IMM-32 and additional LOAD, STORE) are
+// encoded by single bits which will be decoded separately.
 typedef enum logic [4:0] {
     LUI,
     AUIPC,
@@ -105,7 +111,10 @@ typedef enum logic [4:0] {
 typedef enum logic [1:0] {
     B = 2'b00,
     H = 2'b01,
-    W = 2'b10
+    W = 2'b10,
+//RV64I==============
+    D = 2'b11
+//===================
 } mem_width_t;
 
 // machine mode funct12 codes
@@ -125,14 +134,14 @@ typedef struct packed {
     logic        rs1_used;
     logic        rs2_used;
     logic        immediate_used;
-    logic [31:0] immediate;
+    logic [63:0] immediate;
     funct12_t    funct12;
     logic        memory_write;
     logic        memory_read;
     logic        memory_read_unsigned;
     mem_width_t  memory_width;
     logic        enable_wb;
-    logic [31:0] pc;
+    logic [63:0] pc;
 } instr_t;
 
 
@@ -169,7 +178,10 @@ typedef enum logic [2:0] {
 typedef enum logic [2:0] {
     F3_SB  = 3'b000,
     F3_SH  = 3'b001,
-    F3_SW  = 3'b010
+    F3_SW  = 3'b010,
+//RV64I==============
+    F3_SD  = 3'b011
+//===================
 } funct3_store_t;
 
 typedef enum logic [2:0] {

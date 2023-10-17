@@ -59,7 +59,6 @@ The core only supports single cycle latency instruction memory.
 Main memory can have arbitrary (>= 1 cycle) latency.
 
 *******************************************************************************/
-
 `include "riscv.svh"
 
 //`define MACHINE_MODE    // enable support for machine mode instructions, interrupts and exceptions
@@ -84,30 +83,30 @@ module clarvi #(
     output logic [DATA_ADDR_WIDTH-1:0] main_address,
     output logic [3:0]  main_byte_enable,
     output logic        main_read_enable,
-    input  logic [31:0] main_read_data,
+    input  logic [63:0] main_read_data,
     input  logic        main_read_data_valid,
     output logic        main_write_enable,
-    output logic [31:0] main_write_data,
+    output logic [63:0] main_write_data,
     input  logic        main_wait,
 
     // instruction memory port (read-only)
     output logic [INSTR_ADDR_WIDTH-1:0] instr_address,
     output logic        instr_read_enable,
-    input  logic [31:0] instr_read_data,
+    input  logic [63:0] instr_read_data,
     input  logic        instr_wait,
 
     // external interrupt signal, active high
     input  logic        inr_irq,
 
     // debug ports
-    output logic [31:0] debug_register28,
-    output logic [31:0] debug_scratch,
-    output logic [31:0] debug_pc
+    output logic [63:0] debug_register28,
+    output logic [63:0] debug_scratch,
+    output logic [63:0] debug_pc
 );
 
     localparam TRACE = 1;
 
-    logic [31:0] registers [1:31]; // register file - register zero is hardcoded to 0 when fetching
+    logic [63:0] registers [1:31]; // register file - register zero is hardcoded to 0 when fetching
 
     logic [63:0] instret = '0;  // number of instructions retired (completed)
     logic [63:0] cycles  = '0;  // cycle counter
@@ -117,8 +116,8 @@ module clarvi #(
     mstatus_t mstatus = '0;  // status
     mie_t mie = '0;          // interrupts enabled
     mip_t mip;               // interrupts pending
-    logic [31:0] dscratch;   // debug scratch register, used for debug output
-    logic [31:0] mtvec = DEFAULT_TRAP_VECTOR;  // trap handler address
+    logic [63:0] dscratch;   // debug scratch register, used for debug output
+    logic [63:0] mtvec = DEFAULT_TRAP_VECTOR;  // trap handler address
 
     // traps caused by the instruction being fetched or executed
     logic interrupt, if_exception, ex_exception, ex_mem_address_error;
@@ -126,7 +125,7 @@ module clarvi #(
     logic main_read_pending = 0; //whether we have sent a memory read which has not yet been replied to
     
     // buffer to hold the last valid main memory read response: valid is set iff this data has not yet been used by MA
-    logic[31:0] main_read_data_buffer;
+    logic[63:0] main_read_data_buffer;
     logic main_read_data_buffer_valid = 0;
 
     // Stage invalidation flags
@@ -157,8 +156,9 @@ module clarvi #(
 
     // === Instruction Fetch ===================================================
 
-    logic [31:0] pc = INITIAL_PC;
-    logic [31:0] if_pc, if_de_pc, if_de_instr, instr_read_data_buffer;
+    logic [63:0] pc = INITIAL_PC;
+    logic [63:0] if_pc, if_de_pc, instr_read_data_buffer;
+    logic [31:0] if_de_instr; //memory word length is 64 bit but instructions are 32-bit
     logic if_stall_on_prev;
 
     always_comb begin
@@ -185,10 +185,10 @@ module clarvi #(
 
     // === Decode ==============================================================
 
-    logic [31:0] de_rs1_fetched, de_rs2_fetched;
-    logic [31:0] de_rs1_forward, de_rs2_forward; // forwarding logic appears later
+    logic [63:0] de_rs1_fetched, de_rs2_fetched;
+    logic [63:0] de_rs1_forward, de_rs2_forward; // forwarding logic appears later
     instr_t      de_instr, de_ex_instr;
-    logic [31:0] de_ex_rs1_value, de_ex_rs2_value;
+    logic [63:0] de_ex_rs1_value, de_ex_rs2_value;
 
     always_comb begin
         de_instr = decode_instr(if_de_instr, if_de_pc);
@@ -224,9 +224,9 @@ module clarvi #(
     // === Execute =============================================================
 
     instr_t      ex_ma_instr;
-    logic [31:0] ex_mem_address, ex_result, ex_ma_result;
-    logic [1:0]  ex_word_offset, ex_ma_word_offset;
-    logic [29-DATA_ADDR_WIDTH:0] ex_address_high_bits;  // beyond our address width so should be 0
+    logic [63:0] ex_mem_address, ex_result, ex_ma_result;
+    logic [2:0]  ex_word_offset, ex_ma_word_offset;
+    logic [46 -DATA_ADDR_WIDTH:0] ex_address_high_bits;  // beyond our address width so should be 0
 
     always_comb begin
         ex_result = execute(de_ex_instr, de_ex_rs1_value, de_ex_rs2_value);
@@ -264,7 +264,7 @@ module clarvi #(
     // === Branching or Reset ==================================================
 
     logic ex_branch_taken;
-    logic [31:0] ex_branch_target, ex_next_pc;
+    logic [63:0] ex_branch_target, ex_next_pc;
 
     always_comb begin
         ex_branch_taken = !de_ex_invalid && is_branch_taken(de_ex_instr.op, de_ex_rs1_value, de_ex_rs2_value);
@@ -313,7 +313,7 @@ module clarvi #(
     // === Memory Align ========================================================
 
     instr_t ma_wb_instr;
-    logic[31:0] ma_result, ma_load_value, ma_wb_value;
+    logic[63:0] ma_result, ma_load_value, ma_wb_value;
 
     always_comb begin
         // align the loaded value: if we stalled on last cycle then take buffered data instead
@@ -384,14 +384,14 @@ module clarvi #(
 
     // === Interrupts and Exceptions ===========================================
 
-    logic [31:0] mcause;        // trap cause
-    logic [31:0] mepc;          // return address after handling trap
-    logic [31:0] mbadaddr;      // address of instruction which caused an access/misaligned fault
-    logic [31:0] mscratch;      // machine mode scratch register
+    logic [63:0] mcause;        // trap cause
+    logic [63:0] mepc;          // return address after handling trap
+    logic [63:0] mbadaddr;      // address of instruction which caused an access/misaligned fault
+    logic [63:0] mscratch;      // machine mode scratch register
     logic [63:0] timecmp = '0;  // time compare register for triggering timer interrupt
 
-    logic [31:0] trap_pc;       // the address of the instruction that caused the trap or suffered the interrupt
-    logic [31:0] potential_mepc;
+    logic [63:0] trap_pc;       // the address of the instruction that caused the trap or suffered the interrupt
+    logic [63:0] potential_mepc;
 
     always_comb begin
         // wire external interrupt signal to the mip.meip register bit
@@ -401,7 +401,7 @@ module clarvi #(
         // interrupt is only raised if appropriate interrupt enable bits are set
         interrupt = mstatus.mie && (mip.meip && mie.meie || mip.msip && mie.msie || mip.mtip && mie.mtie);
         // instruction fetch fault or misaligned exception
-        if_exception = pc[31:INSTR_ADDR_WIDTH+2] != '0 || !is_aligned(pc[1:0], W);
+        if_exception = pc[63:INSTR_ADDR_WIDTH+2] != '0 || !is_aligned(pc[1:0], W);
         // load/store fault or misaligned exception
         ex_mem_address_error = ex_address_high_bits != '0 || !is_aligned(ex_word_offset, de_ex_instr.memory_width);
         // any exception or trap raised by the currently executing instruction
@@ -470,13 +470,13 @@ module clarvi #(
 
     // === Decode functions ====================================================
 
-    function automatic logic [31:0] fetch(register_t register);
+    function automatic logic [63:0] fetch(register_t register);
         // register zero is wired to constant 0.
         return register == zero ? '0 : registers[register];
     endfunction
 
 
-    function automatic instr_t decode_instr(logic [31:0] instr, logic [31:0] pc);
+    function automatic instr_t decode_instr(logic [31:0] instr, logic [63:0] pc);
         // registers, funct7 and funct3 are in the same place in every instruction type
         decode_instr.rd  = register_t'(instr`rd);
         decode_instr.rs1 = register_t'(instr`rs1);
@@ -622,9 +622,9 @@ module clarvi #(
 
     // === Execute functions ===================================================
 
-    function automatic logic [31:0] execute(instr_t instr, logic [31:0] rs1_value, logic [31:0] rs2_value);
+    function automatic logic [63:0] execute(instr_t instr, logic [63:0] rs1_value, logic [63:0] rs2_value);
 
-        logic [31:0] rs2_value_or_imm = instr.immediate_used ? instr.immediate : rs2_value;
+        logic [63:0] rs2_value_or_imm = instr.immediate_used ? instr.immediate : rs2_value;
 
         // implement both logical and arithmetic as an arithmetic right shift, with a 33rd bit set to 0 or 1 as required.
         // logic signed [32:0] rshift_operand = {(instr.funct7_bit & rs1_value[31]), rs1_value};
@@ -653,7 +653,7 @@ module clarvi #(
     endfunction
 
 
-    function automatic logic is_branch_taken(operation_t operation, logic [31:0] rs1_value, logic [31:0] rs2_value);
+    function automatic logic is_branch_taken(operation_t operation, logic [63:0] rs1_value, logic [63:0] rs2_value);
         unique case (operation)
             BEQ:  return rs1_value == rs2_value;
             BNE:  return rs1_value != rs2_value;
@@ -668,7 +668,7 @@ module clarvi #(
     endfunction
 
 
-    function automatic logic [31:0] target_pc(instr_t instr, logic [31:0] rs1_value);
+    function automatic logic [63:0] target_pc(instr_t instr, logic [63:0] rs1_value);
         unique case (instr.op)
             JAL, BEQ, BNE, BLT, BGE, BLTU, BGEU: return instr.pc + instr.immediate;
             JALR:    return (rs1_value + instr.immediate) & 32'h_ff_ff_ff_fe; // set LSB to 0
@@ -683,7 +683,7 @@ module clarvi #(
 
     // === Memory Access functions =============================================
 
-    function automatic logic [3:0] compute_byte_enable(mem_width_t width, logic [1:0] word_offset);
+    function automatic logic [3:0] compute_byte_enable(mem_width_t width, logic [2:0] word_offset);
         unique case (width)
             B: return 4'b0001 << word_offset;
             H: return 4'b0011 << word_offset;
@@ -692,8 +692,8 @@ module clarvi #(
         endcase
     endfunction
 
-    function automatic logic [31:0] load_shift_mask_extend(mem_width_t width, logic is_unsigned, logic [31:0] value, logic [1:0] word_offset);
-        logic [31:0] masked_value = load_mask(width, value, word_offset);
+    function automatic logic [63:0] load_shift_mask_extend(mem_width_t width, logic is_unsigned, logic [63:0] value, logic [2:0] word_offset);
+        logic [63:0] masked_value = load_mask(width, value, word_offset);
         unique case (width)
             B: return is_unsigned
                     ? {24'b0, masked_value[7:0]}
@@ -706,7 +706,7 @@ module clarvi #(
         endcase
     endfunction
 
-    function automatic logic [31:0] load_mask(mem_width_t width, logic [31:0] value, logic [1:0] word_offset);
+    function automatic logic [63:0] load_mask(mem_width_t width, logic [63:0] value, logic [2:0] word_offset);
         unique case (width)
             B: return (value >> word_offset*8) & 32'h_00_00_00_ff;
             H: return (value >> word_offset*8) & 32'h_00_00_ff_ff;
@@ -718,7 +718,7 @@ module clarvi #(
 
     // === CSR functions =======================================================
 
-    function automatic logic [31:0] read_csr(csr_t csr_addr);
+    function automatic logic [63:0] read_csr(csr_t csr_addr);
         case (csr_addr)
 `ifdef MACHINE_MODE
             MVENDORID, MARCHID, MIMPID, MHARTID, MEDELEG, MIDELEG: return '0;
@@ -754,9 +754,9 @@ module clarvi #(
             CSRRC: csr <= csr & ~value;      \
         endcase
 
-    task automatic execute_csr(instr_t instr, logic [31:0] rs1_value);
+    task automatic execute_csr(instr_t instr, logic [63:0] rs1_value);
         // for immediate versions of the CSR instructions, the rs1 field contains a 5-bit immediate.
-        logic[31:0] value = instr.immediate_used ? instr.rs1 : rs1_value;
+        logic[63:0] value = instr.immediate_used ? instr.rs1 : rs1_value;
         logic[11:0] csr_addr = instr.funct12;
         case (csr_addr)
             MTVEC:     `write_csr(instr.op, value, mtvec)
@@ -783,7 +783,7 @@ module clarvi #(
             if (mip.mtip && mie.mtie) return MTI;
         end
 
-        if (pc[31:INSTR_ADDR_WIDTH+2] != '0)
+        if (pc[63:INSTR_ADDR_WIDTH+2] != '0)
             return INSTR_FAULT;
         if (!is_aligned(pc[1:0], W))
             return INSTR_MISALIGN;
