@@ -81,7 +81,7 @@ module clarvi #(
 
     // data memory port (read/write)
     output logic [DATA_ADDR_WIDTH-1:0] main_address,
-    output logic [3:0]  main_byte_enable,
+    output logic [7:0]  main_byte_enable,
     output logic        main_read_enable,
     input  logic [63:0] main_read_data,
     input  logic        main_read_data_valid,
@@ -163,7 +163,7 @@ module clarvi #(
 
     always_comb begin
         // PC is byte-addressed but our instruction memory is word-addressed
-        instr_address = pc[INSTR_ADDR_WIDTH+1:2];
+        instr_address = pc[INSTR_ADDR_WIDTH+2:3];
         // read the next instruction on every cycle
         instr_read_enable = '1;
     end
@@ -177,7 +177,9 @@ module clarvi #(
         if (!stall_if) begin
             // if there was a stall on the last cycle, we read from the instruction buffer not the bus.
             // this allows the PC to 'catch up' on the next cycle.
-            if_de_instr <= if_stall_on_prev ? instr_read_data_buffer : instr_read_data;
+            // TODO: clean
+            // Get correct instruction from loaded 64-bit word
+            if_de_instr <= ((if_stall_on_prev ? instr_read_data_buffer : instr_read_data) >> (if_pc[2:0] * 8));
             if_pc <= pc;
             if_de_pc <= if_pc;
         end

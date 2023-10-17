@@ -33,7 +33,7 @@ module clarvi_sim();
     localparam ADDR_WIDTH = 16;
 
     logic [ADDR_WIDTH-1:0] main_address;
-    logic [3:0]  main_byteenable;
+    logic [7:0]  main_byteenable;
     logic        main_read;
     logic [63:0] main_readdata;
     logic        main_write;
@@ -50,7 +50,7 @@ module clarvi_sim();
 
 
     dual_port_bram #(
-        .ADDRESS_WIDTH(ADDR_WIDTH)
+        .ADDRESS_WIDTH(ADDR_WIDTH),
         .BYTES_PER_WORD(8)
     ) mem (
         .clock,
@@ -62,11 +62,11 @@ module clarvi_sim();
         .avs_a_write        (main_write),
         .avs_a_writedata    (main_writedata),
         .avs_b_address      (instr_address),
-        .avs_b_byteenable   (4'b1111),
+        .avs_b_byteenable   (8'b11111111),
         .avs_b_read         (instr_read),
         .avs_b_readdata     (instr_readdata),
         .avs_b_write        (1'b0),
-        .avs_b_writedata    (32'dx)
+        .avs_b_writedata    (64'dx)
     );
 
     // components for mocking interrupt or waitrequest signals:

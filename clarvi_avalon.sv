@@ -39,18 +39,18 @@ module clarvi_avalon #(
 
     // data memory port (read/write)
     output logic [DATA_ADDR_WIDTH-1:0] avm_main_address,
-    output logic [3:0]  avm_main_byteenable,
+    output logic [7:0]  avm_main_byteenable,
     output logic        avm_main_read,
-    input  logic [31:0] avm_main_readdata,
+    input  logic [63:0] avm_main_readdata,
     output logic        avm_main_write,
-    output logic [31:0] avm_main_writedata,
+    output logic [63:0] avm_main_writedata,
     input  logic        avm_main_waitrequest,
     input  logic        avm_main_readdatavalid,
 
     // instruction memory port (read-only)
     output logic [INSTR_ADDR_WIDTH-1:0] avm_instr_address,
     output logic        avm_instr_read,
-    input  logic [31:0] avm_instr_readdata,
+    input  logic [63:0] avm_instr_readdata,
     input  logic        avm_instr_waitrequest,
     input  logic        avm_instr_readdatavalid,
 
@@ -58,9 +58,9 @@ module clarvi_avalon #(
     input  logic        inr_irq,
 
     // debug ports
-    output logic [31:0] debug_register28,
-    output logic [31:0] debug_scratch,
-    output logic [31:0] debug_pc
+    output logic [63:0] debug_register28,
+    output logic [63:0] debug_scratch,
+    output logic [63:0] debug_pc
 );
 
     // We only have readdatavalid signal to allow the use of pipelining with a fixed 1-cycle latency memory.
