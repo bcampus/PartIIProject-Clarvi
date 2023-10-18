@@ -716,20 +716,24 @@ module clarvi #(
         logic [63:0] masked_value = load_mask(width, value, word_offset);
         unique case (width)
             B: return is_unsigned
-                    ? {24'b0, masked_value[7:0]}
-                    : {{24{masked_value[7]}}, masked_value[7:0]};
+                    ? {56'b0, masked_value[7:0]}
+                    : {{56{masked_value[7]}}, masked_value[7:0]};
             H: return is_unsigned
-                    ? {16'b0, masked_value[15:0]}
-                    : {{16{masked_value[15]}}, masked_value[15:0]};
-            W: return value;
+                    ? {48'b0, masked_value[15:0]}
+                    : {{48{masked_value[15]}}, masked_value[15:0]};
+            W: return is_unsigned
+                    ? {32'b0, masked_value[31:0]}
+                    : {{32{masked_value[31]}}, masked_value[31:0]};
+            D: return value;
             default: return 'x;
         endcase
     endfunction
 
     function automatic logic [63:0] load_mask(mem_width_t width, logic [63:0] value, logic [2:0] word_offset);
         unique case (width)
-            B: return (value >> word_offset*8) & 32'h_00_00_00_ff;
-            H: return (value >> word_offset*8) & 32'h_00_00_ff_ff;
+            B: return (value >> word_offset*8) & 64'h_00_00_00_00_00_00_00_ff;
+            H: return (value >> word_offset*8) & 64'h_00_00_00_00_00_00_ff_ff;
+            W: return (value >> word_offset*8) & 64'h_00_00_00_00_ff_ff_ff_ff;
             default: return 'x;
         endcase
     endfunction
