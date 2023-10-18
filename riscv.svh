@@ -133,6 +133,7 @@ typedef struct packed {
     register_t   rs2;
     logic        rs1_used;
     logic        rs2_used;
+    logic        is32_bit_op;
     logic        immediate_used;
     logic [63:0] immediate;
     funct12_t    funct12;

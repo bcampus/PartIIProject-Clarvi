@@ -486,6 +486,8 @@ module clarvi #(
         decode_instr.funct12 = funct12_t'(instr`funct12);
 
         decode_instr.op = decode_opcode(instr);
+        decode_instr.is32_bit_op = instr`opcode == OPC_OP_32 
+                                || instr`opcode == OPC_OP_IMM_32;
 
         // we check whether a register is used for forwarding purposes -- no need to forward the zero register
         decode_instr.rs1_used = decode_instr.rs1 != zero
@@ -497,7 +499,8 @@ module clarvi #(
         decode_instr.rs2_used = decode_instr.rs2 != zero
                              && (instr`opcode == OPC_BRANCH
                               || instr`opcode == OPC_STORE
-                              || instr`opcode == OPC_OP);
+                              || instr`opcode == OPC_OP
+                              || instr`opcode == OPC_OP_32);
 
         {decode_instr.immediate_used, decode_instr.immediate} = decode_immediate(instr);
 
@@ -541,6 +544,14 @@ module clarvi #(
                 endcase
             OPC_LOAD:  return LOAD;
             OPC_STORE: return STORE;
+            OPC_OP_32, OPC_OP_IMM_32:
+                unique case (funct3)
+                    // there is no SUBI instruction so also check opcode
+                    F3_ADDSUB: return instr[5] && funct12[10] ? SUB : ADD;
+                    F3_SLL:  return funct12[5] ? INVALID : SL;
+                    F3_SR:   return funct12[5] ? INVALID : (funct12[10] ? SRA : SRL);
+                    default: return INVALID;
+                endcase
             OPC_OP, OPC_OP_IMM:
                 unique case (funct3)
                     // there is no SUBI instruction so also check opcode
@@ -550,10 +561,8 @@ module clarvi #(
                     F3_XOR:  return XOR;
                     F3_OR:   return OR;
                     F3_AND:  return AND;
-                    // for immediate shifts we check the 6th bit in the shift amount is 0
-                    // for non-immediate shifts this value must be 0 anyway (it is the end of the funct7 code)
-                    F3_SLL:  return funct12[5] ? INVALID : SL;
-                    F3_SR:   return funct12[5] ? INVALID : (funct12[10] ? SRA : SRL);
+                    F3_SLL:  return SL;
+                    F3_SR:   return funct12[10] ? SRA : SRL;
                     default: return INVALID;
                 endcase
             OPC_MISC_MEM: return funct3[0] ? FENCE_I : FENCE;
@@ -579,26 +588,27 @@ module clarvi #(
         endcase
     endfunction
 
-    function automatic logic [32:0] decode_immediate(logic [31:0] instr);
+    function automatic logic [64:0] decode_immediate(logic [31:0] instr);
         // returns an extra top bit to indicate whether the immediate is used
         // all except u-type instructions have sign-extended immediates.
-        logic [19:0] sign_ext_20 = {20{instr[31]}};
-        logic [11:0] sign_ext_12 = {12{instr[31]}};
+        logic [51:0] sign_ext_52 = {52{instr[31]}};
+        logic [43:0] sign_ext_44 = {44{instr[31]}};
+        logic [31:0] sign_ext_32 = {32{instr[31]}};
         unique case (instr`opcode)
-            OPC_JALR, OPC_LOAD, OPC_OP_IMM: // i-type
-                return {1'b1, sign_ext_20, instr[31:20]};
+            OPC_JALR, OPC_LOAD, OPC_OP_IMM, OPC_OP_IMM_32: // i-type
+                return {1'b1, sign_ext_52, instr[31:20]};
             OPC_STORE: // s-type
-                return {1'b1, sign_ext_20, instr[31:25], instr[11:7]};
+                return {1'b1, sign_ext_52, instr[31:25], instr[11:7]};
             OPC_BRANCH: // sb-type
-                return {1'b1, sign_ext_20, instr[7], instr[30:25], instr[11:8], 1'b0};
+                return {1'b1, sign_ext_52, instr[7], instr[30:25], instr[11:8], 1'b0};
             OPC_JAL: // uj-type
-                return {1'b1, sign_ext_12, instr[19:12], instr[20], instr[30:21], 1'b0};
+                return {1'b1, sign_ext_44, instr[19:12], instr[20], instr[30:21], 1'b0};
             OPC_LUI, OPC_AUIPC: // u-type
-                return {1'b1, instr[31:12], 12'b0};
+                return {1'b1, sign_ext_32, instr[31:12], 12'b0};
             OPC_SYSTEM: // no ordinary immediate but possibly a csr zimm (5-bit immediate)
-                return {instr[14], 32'bx};
+                return {instr[14], 64'bx};
             default: // no immediate
-                return {1'b0, 32'bx};
+                return {1'b0, 64'bx};
         endcase
     endfunction
 

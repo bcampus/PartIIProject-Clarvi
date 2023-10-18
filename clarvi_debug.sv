@@ -102,10 +102,18 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
             JAL:  $write("%s\t%s, %0d\t\t%s, target = 0x%h", db_instr.op, db_instr.rd, $signed(db_instr.immediate), register_result, db_branch_target);
             JALR: $write("%s\t%s, %s, %0d\t\t%s, %s, target = 0x%h", db_instr.op, db_instr.rd, db_instr.rs1, $signed(db_instr.immediate), register_result, register_values, db_branch_target);
             ADD, SUB, SLT, SLTU, XOR, OR, AND, SL, SRL, SRA: begin
-                if (db_instr.immediate_used)
-                    $write("%s%s\t%s, %s, %0d\t\t%s, %s", db_instr.op, "I", db_instr.rd, db_instr.rs1, $signed(db_instr.immediate), register_result, register_values);
-                else
-                    $write("%s\t%s, %s, %s\t\t%s, %s", db_instr.op, db_instr.rd, db_instr.rs1, db_instr.rs2, register_result, register_values);
+                if (db_instr.immediate_used) begin
+                    if (db_instr.is32_bit_op)
+                        $write("%s%s\t%s, %s, %0d\t\t%s, %s", db_instr.op, "IW", db_instr.rd, db_instr.rs1, $signed(db_instr.immediate), register_result, register_values);
+                    else 
+                        $write("%s%s\t%s, %s, %0d\t\t%s, %s", db_instr.op, "I", db_instr.rd, db_instr.rs1, $signed(db_instr.immediate), register_result, register_values);
+                end
+                else begin
+                    if (db_instr.is32_bit_op)
+                        $write("%s%s\t%s, %s, %s\t\t%s, %s", db_instr.op, "W", db_instr.rd, db_instr.rs1, db_instr.rs2, register_result, register_values);
+                    else
+                        $write("%s\t%s, %s, %s\t\t%s, %s", db_instr.op, db_instr.rd, db_instr.rs1, db_instr.rs2, register_result, register_values);
+                end
             end
             BEQ, BNE, BLT, BGE, BLTU, BGEU:
                 $write("%s\t%s, %s, 0x%h\t%s, branch %s", db_instr.op, db_instr.rs1, db_instr.rs2, db_branch_target, register_values, db_branch_taken ? "taken" : "not taken");
