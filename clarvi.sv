@@ -226,12 +226,14 @@ module clarvi #(
     // === Execute =============================================================
 
     instr_t      ex_ma_instr;
-    logic [63:0] ex_mem_address, ex_result, ex_ma_result;
+    logic [63:0] ex_mem_address, ex_result, ex_result_sign_ext, ex_ma_result;
     logic [2:0]  ex_word_offset, ex_ma_word_offset;
-    logic [46 -DATA_ADDR_WIDTH:0] ex_address_high_bits;  // beyond our address width so should be 0
+    logic [60 -DATA_ADDR_WIDTH:0] ex_address_high_bits;  // beyond our address width so should be 0
 
     always_comb begin
         ex_result = execute(de_ex_instr, de_ex_rs1_value, de_ex_rs2_value);
+
+        ex_result_sign_ext = {{32{ex_result[31]}}, ex_result[31:0]};
 
         // --- Memory Access ---------------------------------------------------
 
@@ -247,7 +249,7 @@ module clarvi #(
         // set byte_enable mask according to whether we are loading/storing a word, half word or byte.
         main_byte_enable = compute_byte_enable(de_ex_instr.memory_width, ex_word_offset);
 
-        // shift the store value into the correct position in the 32-bit word
+        // shift the store value into the correct position in the 64-bit word
         main_write_data = de_ex_rs2_value << ex_word_offset*8;
     end
 
@@ -257,7 +259,8 @@ module clarvi #(
         end else begin
             if (!stall_ex) begin
                 ex_ma_instr       <= de_ex_instr;
-                ex_ma_result      <= ex_result;
+                ex_ma_result      <= de_ex_instr.is32_bit_op ? ex_result_sign_ext 
+                                                             :  ex_result;
                 ex_ma_word_offset <= ex_word_offset;
                 main_read_pending <= main_read_enable;
             end
@@ -370,12 +373,14 @@ module clarvi #(
         // now we also check whether source and destination registers match up
         // prioritise forwarding from earlier stages (more recent instructions),
         // since these may overwrite values written by later stages (less recent instructions).
-        if      (could_forward_from_ex && de_ex_instr.rd == de_instr.rs1) de_rs1_forward = ex_result;
+        if      (could_forward_from_ex && de_ex_instr.rd == de_instr.rs1) de_rs1_forward = de_ex_instr.is32_bit_op ? ex_result_sign_ext 
+                                                                                                                   : ex_result;
         else if (could_forward_from_ma && ex_ma_instr.rd == de_instr.rs1) de_rs1_forward = ma_result;
         else if (could_forward_from_wb && ma_wb_instr.rd == de_instr.rs1) de_rs1_forward = ma_wb_value;
         else                                                              de_rs1_forward = de_rs1_fetched;
 
-        if      (could_forward_from_ex && de_ex_instr.rd == de_instr.rs2) de_rs2_forward = ex_result;
+        if      (could_forward_from_ex && de_ex_instr.rd == de_instr.rs2) de_rs2_forward = de_ex_instr.is32_bit_op ? ex_result_sign_ext 
+                                                                                                                   : ex_result;
         else if (could_forward_from_ma && ex_ma_instr.rd == de_instr.rs2) de_rs2_forward = ma_result;
         else if (could_forward_from_wb && ma_wb_instr.rd == de_instr.rs2) de_rs2_forward = ma_wb_value;
         else                                                              de_rs2_forward = de_rs2_fetched;
@@ -642,7 +647,7 @@ module clarvi #(
         // logic signed [32:0] rshift_operand = {(instr.funct7_bit & rs1_value[31]), rs1_value};
 
         // shifts use the lower 5 bits of the intermediate or rs2 value
-        logic [4:0] shift_amount = rs2_value_or_imm[4:0];
+        logic [5:0] shift_amount = rs2_value_or_imm[5:0];
 
         unique case (instr.op)
             ADD:   return rs1_value + rs2_value_or_imm;
@@ -653,8 +658,10 @@ module clarvi #(
             OR:    return rs1_value | rs2_value_or_imm;
             AND:   return rs1_value & rs2_value_or_imm;
             SL:    return rs1_value << shift_amount;
-            SRL:   return rs1_value >> shift_amount;
-            SRA:   return $signed(rs1_value) >>> shift_amount;
+            SRL:   return instr.is32_bit_op ? rs1_value[31:0] >> shift_amount 
+                                            : rs1_value >> shift_amount;
+            SRA:   return instr.is32_bit_op ? $signed(rs1_value[31:0]) >>> shift_amount
+                                            : $signed(rs1_value) >>> shift_amount;
             LUI:   return instr.immediate;
             AUIPC: return instr.immediate + instr.pc;
             // JAL(R) stores the address of the instruction that followed the jump
@@ -695,11 +702,12 @@ module clarvi #(
 
     // === Memory Access functions =============================================
 
-    function automatic logic [3:0] compute_byte_enable(mem_width_t width, logic [2:0] word_offset);
+    function automatic logic [7:0] compute_byte_enable(mem_width_t width, logic [2:0] word_offset);
         unique case (width)
-            B: return 4'b0001 << word_offset;
-            H: return 4'b0011 << word_offset;
-            W: return 4'b1111 << word_offset;
+            B: return 8'b00000001 << word_offset;
+            H: return 8'b00000011 << word_offset;
+            W: return 8'b00001111 << word_offset;
+            D: return 8'b11111111 << word_offset;
             default: return 'x;
         endcase
     endfunction
