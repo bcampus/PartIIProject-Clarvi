@@ -61,11 +61,11 @@ Main memory can have arbitrary (>= 1 cycle) latency.
 *******************************************************************************/
 `include "riscv.svh"
 
-//`define MACHINE_MODE    // enable support for machine mode instructions, interrupts and exceptions
+`define MACHINE_MODE    // enable support for machine mode instructions, interrupts and exceptions
 `define DEBUG           // enable debug outputs
 `ifdef MODEL_TECH
     `define SIMULATION  // enable simulation features
-//  `define TRACE       // enable full instruction tracing in simulation.
+    //`define TRACE       // enable full instruction tracing in simulation.
 `endif
 
 `timescale 1ns/10ps
@@ -627,6 +627,7 @@ module clarvi #(
             MVENDORID, MARCHID, MIMPID, MHARTID, MEDELEG, MIDELEG,
             MISA, MTVEC, MSTATUS, MIP, MIE, MSCRATCH, MEPC, MCAUSE, MBADADDR, DSCRATCH,
             MCYCLE, MTIME, MINSTRET, MCYCLEH, MTIMEH, MINSTRETH, MTIMECMP, MTIMECMPH,
+            DOUTHEX,DOUTCHAR,DOUTINT,
 `endif
             // in user-mode only timer CSRs can be read
             CYCLE, TIME, CYCLEH, TIMEH:
@@ -755,7 +756,7 @@ module clarvi #(
             MEPC:      return {mepc[31:2], 2'b0}; // must be aligned on a 4-byte boundary
             MCAUSE:    return {mcause[31], 27'b0, mcause[3:0]};
             MBADADDR:  return mbadaddr;
-            DSCRATCH:  return dscratch;
+            DSCRATCH, DOUTHEX, DOUTCHAR, DOUTINT:  return dscratch;
             MINSTRET:  return instret[31:0];
             MINSTRETH: return instret[63:32];
             MTIMECMP:  return timecmp[31:0];
@@ -792,7 +793,7 @@ module clarvi #(
             MBADADDR:  `write_csr(instr.op, value, mbadaddr)
             MTIMECMP:  `write_csr(instr.op, value, timecmp[31:0])
             MTIMECMPH: `write_csr(instr.op, value, timecmp[63:32])
-            DSCRATCH:  `write_csr(instr.op, value, dscratch)
+            DSCRATCH,DOUTHEX,DOUTCHAR,DOUTINT:  `write_csr(instr.op, value, dscratch)
         endcase
     endtask
 

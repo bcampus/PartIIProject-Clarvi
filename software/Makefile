@@ -25,7 +25,7 @@ LD = $(RISCV_PREFIX)ld
 OBJCOPY = $(RISCV_PREFIX)objcopy
 OBJDUMP = $(RISCV_PREFIX)objdump
 
-TARGET_ARCH = -mabi=lp64 -march=rv64i 
+TARGET_ARCH = -mabi=lp64 -march=rv64i_zicsr
 CCFLAGS = -O3 $(TARGET_ARCH)
 
 # Lists of rules: the name of a file, followed by the files it depends on.
@@ -56,7 +56,7 @@ $(BUILD)/$(PROJECT).dump: $(BUILD)/$(PROJECT).elf
 
 # extract the binary data from data and text sections to get a binary image of memory
 $(BUILD)/mem.bin: $(BUILD)/$(PROJECT).elf
-	$(OBJCOPY) -O binary --only-section=.data* --only-section=.text* $< $@
+	$(OBJCOPY) -O binary --only-section=.rodata* --only-section=.data* --only-section=.text* $< $@
 
 # convert to an ASCII hex file for simulation
 $(BUILD)/mem.txt: $(BUILD)/mem.bin
