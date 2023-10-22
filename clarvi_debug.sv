@@ -29,9 +29,15 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
         if (!ex_ma_invalid && !stall_wb) begin
             case (ex_ma_instr.op)
                 CSRRW, CSRRS, CSRRC:
+                begin
                     // catch writes to dscratch and output them
-                    if (ex_ma_instr.funct12 == DSCRATCH)
+                    if (ex_ma_instr.funct12 == DSCRATCH || ex_ma_instr.funct12 == DOUTHEX)
                         $display("Debug output: %s = 0x%h", ex_ma_instr.rs1, dscratch);
+                    if (ex_ma_instr.funct12 == DOUTCHAR)
+                        $write("%c", dscratch);
+                    if (ex_ma_instr.funct12 == DOUTINT)
+                        $display("Debug output: %s = %d", ex_ma_instr.rs1, dscratch);
+                end
             endcase
         end
 

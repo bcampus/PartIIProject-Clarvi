@@ -237,7 +237,12 @@ typedef enum logic [11:0] {
     // provisional debug CSRs
     DCSR      = 12'h7B0,
     DPC       = 12'h7B1,
-    DSCRATCH  = 12'h7B2
+    DSCRATCH  = 12'h7B2,
+
+    // Debug output
+    DOUTHEX = 12'h800,
+    DOUTCHAR = 12'h801,
+    DOUTINT = 12'h802
 } csr_t;
 
 
