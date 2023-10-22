@@ -31,12 +31,14 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                 CSRRW, CSRRS, CSRRC:
                 begin
                     // catch writes to dscratch and output them
-                    if (ex_ma_instr.funct12 == DSCRATCH || ex_ma_instr.funct12 == DOUTHEX)
+                    if (ex_ma_instr.funct12 == DSCRATCH)
                         $display("Debug output: %s = 0x%h", ex_ma_instr.rs1, dscratch);
+                    if (ex_ma_instr.funct12 == DOUTHEX)
+                        $write("0x%h", dscratch);
                     if (ex_ma_instr.funct12 == DOUTCHAR)
                         $write("%c", dscratch);
                     if (ex_ma_instr.funct12 == DOUTINT)
-                        $display("Debug output: %s = %d", ex_ma_instr.rs1, dscratch);
+                        $write("%d", dscratch);
                 end
             endcase
         end
