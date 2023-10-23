@@ -8,8 +8,6 @@ int y1=0xaaaaaaaa;
 int y2=0x7aaaaaaa;
 unsigned int y3=0xaaaaaaaa;
 unsigned WORD y4 = -1;
-const int tstCnst = 0xabcdef12;
-
 
 int mult(int a, int b){
     int result = 0;
@@ -50,6 +48,32 @@ int test_shifts(){
     return 0;
 }
 
+int test_load(){
+    
+    long x1 = 0x0; 
+    long x2 = 0x0; 
+    long *x1_ptr = &x1;
+    long *x2_ptr = &x2;
+
+    //MSB of D,W,H,B = 0
+    *x1_ptr = 0x08192a4b4c5d6e7f;
+    *x2_ptr = 0x8091a2b3c4d5e6f7; //Should force SD
+
+    return helper_loadTest(x1_ptr, x2_ptr, x1, x2);
+    
+}
+
+int test_store(){
+    
+    long x = 0x0; 
+    long *x_ptr = &x;
+
+    *x_ptr = 0x08192a4b4c5d6e7f;
+
+    return helper_storeTest(x_ptr, x);
+    
+}
+
 void test(char *name, int test(void)){
     dprint_str(name);
     int result = test();
@@ -66,6 +90,8 @@ int main(void) {
     //test(test_shifts);
     test("lui tests:\n", test_lui);
     test("auipc tests:\n", test_auipc);
+    test("load tests:\n", test_load);
+    test("store tests:\n", test_store);
     //dprint_str("Mult tst:\n");
     //dprint_intvar("x", x);
     //x = mult(x, x);
