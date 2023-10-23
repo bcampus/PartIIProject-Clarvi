@@ -57,7 +57,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 `ifdef TRACE
 
-    logic [31:0] db_rs1_value, db_rs2_value, db_result, db_mem_address, db_branch_target;
+    logic [63:0] db_rs1_value, db_rs2_value, db_result, db_mem_address, db_branch_target;
     logic db_invalid, db_branch_taken;
     instr_t db_instr;
 
