@@ -1,5 +1,8 @@
 #asmsyntax=asm
 
+#Test helpers designed to ensure that specific instructions are being used and
+#that they are being compared to the results of *different* instructions.
+
 .macro  DEBUG_PRINT     reg
 	csrw 0x7B2, \reg
 .endm
@@ -224,4 +227,54 @@ helper_storeTest:
 
     li      a0, 0
 sTest_ret:
+    ret
+
+.global helper_addSubTest
+helper_addSubTest:
+    li t0, 0x7a547fffffffffff
+    li t1, 0x15a2000000000001
+    li t2, 0x8ff6800000000000
+    li t3, 0x7a54800000000000
+
+    #Add/Sub tests
+    add t4, t0, t1
+    ASSERT_EQ t4, t2, 1, addTest_ret
+    sub t4, t2, t0
+    ASSERT_EQ t4, t1, 2, addTest_ret
+    sub t4, t2, t1
+    ASSERT_EQ t4, t0, 3, addTest_ret
+
+    
+    #Demonstrate ADDI/SUBI
+    addi t4, t0, 1
+    ASSERT_EQ t4, t3, 4, addTest_ret
+    addi t4, t3, -1
+    ASSERT_EQ t4, t0, 5, addTest_ret
+
+    li t2, 0xfffffffffffffffe
+    li t3, 0x00000000ffffffff
+    #Demonstrate ADDW/SUBW
+    ADDW t4, t0, t1
+    ASSERT_EQ t4, zero, 6, addTest_ret
+    ADDW t4, t0, t3
+    ASSERT_EQ t4, t2, 7, addTest_ret
+    SUBW t4, t0, t1
+    ASSERT_EQ t4, t2, 8, addTest_ret
+    SUBW t4, t0, t3
+    ASSERT_EQ t4, zero, 9, addTest_ret
+
+    #Demonstrate ADDIW
+    ADDIW t4, t0, 1
+    ASSERT_EQ t4, zero, 10, addTest_ret
+    ADDIW t4, t0, -1
+    ASSERT_EQ t4, t2, 11, addTest_ret
+
+    #Demonstrate sext.w = addiw instruction
+    li t0, 0x0000000080000000
+    li t1, 0xffffffff80000000
+    sext.w t2, t0
+    ASSERT_EQ t1, t2, 12, addTest_ret
+
+    li      a0, 0
+addTest_ret:
     ret
