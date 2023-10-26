@@ -1,4 +1,4 @@
-:asmsyntax=asm
+#asmsyntax=asm
 
 .macro  DEBUG_PRINT     reg
 	csrw 0x7B2, \reg
