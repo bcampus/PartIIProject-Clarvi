@@ -21,5 +21,5 @@ int main(void) {
     //dprint_intvar("x", x);
     //x = mult(x, x);
     //dprint_intvar("x^2", x);
-    //bubbleSortBenchMark();
+    bubbleSortBenchMark();
 }

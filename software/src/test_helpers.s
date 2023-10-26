@@ -269,7 +269,7 @@ helper_addSubTest:
     ADDIW t4, t0, -1
     ASSERT_EQ t4, t2, 11, addTest_ret
 
-    #Demonstrate sext.w = addiw instruction
+    #Demonstrate sext.w (=addiw) pseudoinstruction
     li t0, 0x0000000080000000
     li t1, 0xffffffff80000000
     sext.w t2, t0
