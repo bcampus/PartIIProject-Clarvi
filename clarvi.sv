@@ -177,9 +177,9 @@ module clarvi #(
         if (!stall_if) begin
             // if there was a stall on the last cycle, we read from the instruction buffer not the bus.
             // this allows the PC to 'catch up' on the next cycle.
-            // TODO: clean
             // Get correct instruction from loaded 64-bit word
-            if_de_instr <= ((if_stall_on_prev ? instr_read_data_buffer : instr_read_data) >> (if_pc[2:0] * 8));
+            if_de_instr <= (if_stall_on_prev ? instr_read_data_buffer 
+                                             : instr_read_data) >> (if_pc[2:0] * 8);
             if_pc <= pc;
             if_de_pc <= if_pc;
         end
