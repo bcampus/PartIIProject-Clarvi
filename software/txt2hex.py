@@ -16,7 +16,7 @@ def txt2hex(txtfile, hexfile):
     recordtype = '00'
     for line in txtfile:
         line_stripped = line.rstrip('\r\n')
-        numbytes = len(line_stripped)/2
+        numbytes = len(line_stripped)//2
         data = line_stripped.upper()
         # the inner part of the line to be checksummed
         hexline = format(numbytes, '02X') + format(address, '04X') + recordtype + data
@@ -24,7 +24,7 @@ def txt2hex(txtfile, hexfile):
         hexline = ':' + hexline + checksum(hexline)
         hexfile.write(hexline+'\n')
         # advance the address
-        address += numbytes / addr_resolution
+        address += numbytes // addr_resolution
     hexfile.write(EOF+'\n')
 
 def checksum(line):
