@@ -1,1 +1,1 @@
-#define WORD int
+#define WORD long
