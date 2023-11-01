@@ -81,18 +81,18 @@ module clarvi #(
 
     // data memory port (read/write)
     output logic [DATA_ADDR_WIDTH-1:0] main_address,
-    output logic [7:0]  main_byte_enable,
+    output logic [3:0]  main_byte_enable,
     output logic        main_read_enable,
-    input  logic [63:0] main_read_data,
+    input  logic [31:0] main_read_data,
     input  logic        main_read_data_valid,
     output logic        main_write_enable,
-    output logic [63:0] main_write_data,
+    output logic [31:0] main_write_data,
     input  logic        main_wait,
 
     // instruction memory port (read-only)
     output logic [INSTR_ADDR_WIDTH-1:0] instr_address,
     output logic        instr_read_enable,
-    input  logic [63:0] instr_read_data,
+    input  logic [31:0] instr_read_data,
     input  logic        instr_wait,
 
     // external interrupt signal, active high
@@ -125,7 +125,7 @@ module clarvi #(
     logic main_read_pending = 0; //whether we have sent a memory read which has not yet been replied to
     
     // buffer to hold the last valid main memory read response: valid is set iff this data has not yet been used by MA
-    logic[63:0] main_read_data_buffer;
+    logic[31:0] main_read_data_buffer;
     logic main_read_data_buffer_valid = 0;
 
     // Stage invalidation flags
@@ -138,6 +138,7 @@ module clarvi #(
     logic stall_for_memory_wait;   // stall everything when main memory or instruction memory isn't ready for load/store/IF
     logic stall_for_load_dep; // stall IF, DE and repeat EX for a load followed by dependent instruction
     logic stall_for_memory_pending; //stall IF, DE and EX when a read request is late being answered
+    logic stall_for_decode; //Stall IF if decode is splitting the instruction in two to be fed down the pipeline
     
     // distribute stall signals to each stage:
     logic stall_if;
@@ -147,7 +148,7 @@ module clarvi #(
     logic stall_wb;
     
     always_comb begin
-        stall_if = stall_for_memory_wait || stall_for_memory_pending || stall_for_load_dep;
+        stall_if = stall_for_memory_wait || stall_for_memory_pending || stall_for_load_dep || stall_for_decode;
         stall_de = stall_for_memory_wait || stall_for_memory_pending || stall_for_load_dep;
         stall_ex = stall_for_memory_wait || stall_for_memory_pending;
         stall_ma = stall_for_memory_wait;
@@ -157,13 +158,13 @@ module clarvi #(
     // === Instruction Fetch ===================================================
 
     logic [63:0] pc = INITIAL_PC;
-    logic [63:0] if_pc, if_de_pc, instr_read_data_buffer;
-    logic [31:0] if_de_instr; //memory word length is 64 bit but instructions are 32-bit
+    logic [63:0] if_pc, if_de_pc;
+    logic [31:0] if_de_instr, instr_read_data_buffer; //memory word length is 64 bit but instructions are 32-bit
     logic if_stall_on_prev;
 
     always_comb begin
         // PC is byte-addressed but our instruction memory is word-addressed
-        instr_address = pc[INSTR_ADDR_WIDTH+2:3];
+        instr_address = pc[INSTR_ADDR_WIDTH+1:2];
         // read the next instruction on every cycle
         instr_read_enable = '1;
     end
@@ -177,9 +178,7 @@ module clarvi #(
         if (!stall_if) begin
             // if there was a stall on the last cycle, we read from the instruction buffer not the bus.
             // this allows the PC to 'catch up' on the next cycle.
-            // Get correct instruction from loaded 64-bit word
-            if_de_instr <= (if_stall_on_prev ? instr_read_data_buffer 
-                                             : instr_read_data) >> (if_pc[2:0] * 8);
+            if_de_instr <= if_stall_on_prev ? instr_read_data_buffer : instr_read_data;
             if_pc <= pc;
             if_de_pc <= if_pc;
         end
