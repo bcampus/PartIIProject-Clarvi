@@ -63,9 +63,9 @@ add_fileset QUARTUS_SYNTH QUARTUS_SYNTH "" ""
 set_fileset_property QUARTUS_SYNTH TOP_LEVEL clarvi_avalon
 set_fileset_property QUARTUS_SYNTH ENABLE_RELATIVE_INCLUDE_PATHS false
 set_fileset_property QUARTUS_SYNTH ENABLE_FILE_OVERWRITE_MODE false
-add_fileset_file clarvi_avalon.sv SYSTEM_VERILOG PATH ../clarvi_avalon.sv TOP_LEVEL_FILE
-add_fileset_file clarvi.sv SYSTEM_VERILOG PATH ../clarvi.sv
-add_fileset_file riscv.svh SYSTEM_VERILOG_INCLUDE PATH ../riscv.svh
+add_fileset_file clarvi_avalon.sv SYSTEM_VERILOG PATH clarvi/clarvi_avalon.sv TOP_LEVEL_FILE
+add_fileset_file clarvi.sv SYSTEM_VERILOG PATH clarvi/clarvi.sv
+add_fileset_file riscv.svh SYSTEM_VERILOG_INCLUDE PATH clarvi/riscv.svh
 
 
 #

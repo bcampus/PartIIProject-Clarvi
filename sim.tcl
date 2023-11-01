@@ -26,13 +26,13 @@ vlib work
 
 # used to enable trace by passing TRACE as an argument
 if {$argc == 2} {
-    vlog clarvi.sv +define+$2
+    vlog clarvi/clarvi.sv +define+$2
 } else {
-    vlog clarvi.sv
+    vlog clarvi/clarvi.sv
 }
 
-vlog clarvi_avalon.sv
-vlog bram.sv
+vlog clarvi/clarvi_avalon.sv
+vlog clarvi/bram.sv
 vlog sim.sv
 
 if {$argc > 0} {
