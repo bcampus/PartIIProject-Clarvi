@@ -139,6 +139,7 @@ module clarvi #(
     logic stall_for_load_dep; // stall IF, DE and repeat EX for a load followed by dependent instruction
     logic stall_for_memory_pending; //stall IF, DE and EX when a read request is late being answered
     logic stall_for_decode; //Stall IF if decode is splitting the instruction in two to be fed down the pipeline
+    logic stall_for_multiple_access; //Stall IF, DE when multiple words of memory require loading
     
     // distribute stall signals to each stage:
     logic stall_if;
@@ -148,8 +149,8 @@ module clarvi #(
     logic stall_wb;
     
     always_comb begin
-        stall_if = stall_for_memory_wait || stall_for_memory_pending || stall_for_load_dep || stall_for_decode;
-        stall_de = stall_for_memory_wait || stall_for_memory_pending || stall_for_load_dep;
+        stall_if = stall_for_memory_wait || stall_for_memory_pending || stall_for_load_dep || stall_for_multiple_access || stall_for_decode ;
+        stall_de = stall_for_memory_wait || stall_for_memory_pending || stall_for_load_dep || stall_for_multiple_access;
         stall_ex = stall_for_memory_wait || stall_for_memory_pending;
         stall_ma = stall_for_memory_wait;
         stall_wb = stall_for_memory_wait;
@@ -186,21 +187,22 @@ module clarvi #(
 
     // === Decode ==============================================================
 
-    logic [63:0] de_rs1_fetched, de_rs2_fetched;
-    logic [63:0] de_rs1_forward, de_rs2_forward; // forwarding logic appears later
+    logic [31:0] de_rs1_fetched, de_rs2_fetched;
+    logic [31:0] de_rs1_forward, de_rs2_forward; // forwarding logic appears later
     instr_t      de_instr, de_ex_instr;
-    logic [63:0] de_ex_rs1_value, de_ex_rs2_value;
+    logic [31:0] de_ex_rs1_value, de_ex_rs2_value;
+    logic de_instr_part = 0;
 
     always_comb begin
-        de_instr = decode_instr(if_de_instr, if_de_pc);
+        de_instr = decode_instr(if_de_instr, if_de_pc, de_instr_part);
 
         // register fetch
-        de_rs1_fetched = fetch(de_instr.rs1);
-        de_rs2_fetched = fetch(de_instr.rs2);
+        de_rs1_fetched = fetch(de_instr.rs1, de_instr.instr_part);
+        de_rs2_fetched = fetch(de_instr.rs2, de_instr.instr_part);
 
         // if the next instruction is a load and this instruction is dependent on its result,
         // stall for one cycle since the result won't be ready yet - unless the load raises an exception.
-        stall_for_load_dep = !if_de_invalid && !de_ex_invalid && de_ex_instr.memory_read && !ex_mem_address_error
+        stall_for_load_dep = !if_de_invalid && !de_ex_invalid && de_ex_instr.memory_read && !ex_mem_address_error 
                           && (de_instr.rs1 == de_ex_instr.rd && de_instr.rs1_used
                            || de_instr.rs2 == de_ex_instr.rd && de_instr.rs2_used);
 
@@ -211,6 +213,7 @@ module clarvi #(
                                 
         stall_for_memory_pending = main_read_pending && !main_read_data_buffer_valid && !main_read_data_valid;
 
+        stall_for_decode = !if_de_invalid && de_instr_part != 1;
     end
 
     always_ff @(posedge clock) begin
@@ -219,37 +222,50 @@ module clarvi #(
             // if the value isn't forwarded, these take the register fetch results.
             de_ex_rs1_value <= de_rs1_forward;
             de_ex_rs2_value <= de_rs2_forward;
+            de_instr_part <= !if_de_invalid ? de_instr_part + 1 : 0;
         end
     end
 
     // === Execute =============================================================
 
     instr_t      ex_ma_instr;
-    logic [63:0] ex_mem_address, ex_result, ex_result_sign_ext, ex_ma_result;
-    logic [2:0]  ex_word_offset, ex_ma_word_offset;
-    logic [60 -DATA_ADDR_WIDTH:0] ex_address_high_bits;  // beyond our address width so should be 0
+    logic [63:0] ex_mem_address;
+    logic [31:0] ex_result, ex_result_sign_ext, ex_ma_result, ex_write_data;
+    logic ex_ext_value, ex_access_part; 
+    logic [1:0]  ex_word_offset, ex_ma_word_offset;
+    logic [61 -DATA_ADDR_WIDTH:0] ex_address_high_bits;  // beyond our address width so should be 0
 
     always_comb begin
         ex_result = execute(de_ex_instr, de_ex_rs1_value, de_ex_rs2_value);
 
-        ex_result_sign_ext = {{32{ex_result[31]}}, ex_result[31:0]};
+        ex_result_sign_ext = {32{ex_ext_value}};
 
         // --- Memory Access ---------------------------------------------------
 
-        main_read_enable  = !de_ex_invalid && !interrupt && !ex_mem_address_error && de_ex_instr.memory_read && !stall_for_memory_pending;
-        main_write_enable = !de_ex_invalid && !interrupt && !ex_mem_address_error && de_ex_instr.memory_write && !stall_for_memory_pending;
+        main_read_enable  = !de_ex_invalid && !interrupt && !ex_mem_address_error && de_ex_instr.memory_read && !stall_for_memory_pending && de_ex_instr.instr_part == 1;
+        main_write_enable = !de_ex_invalid && !interrupt && !ex_mem_address_error && de_ex_instr.memory_write && !stall_for_memory_pending && de_ex_instr.instr_part == 1;
 
-        // do address calculation
-        ex_mem_address = de_ex_rs1_value + de_ex_instr.immediate;
+        // do address calculation, using bit 32 to propagate carry between
+        // adds
+        case (de_ex_instr.instr_part)
+            1'b0: begin
+                ex_mem_address[32:0] = de_ex_rs1_value + de_ex_instr.immediate;
+                ex_write_data = de_ex_rs2_value; 
+            end
+            1'b1: ex_mem_address[63:32] = de_ex_rs1_value + de_ex_instr.immediate + ex_mem_address[32]; 
+        endcase
         // our memory is word addressed, so cut off the bottom two bits (this becomes the word offset),
         // and the higher bits beyond our address range which should be 0.
-        {ex_address_high_bits, main_address, ex_word_offset} = ex_mem_address;
+        {ex_address_high_bits, main_address, ex_word_offset} = ex_mem_address + ex_access_part * 4;
 
         // set byte_enable mask according to whether we are loading/storing a word, half word or byte.
-        main_byte_enable = compute_byte_enable(de_ex_instr.memory_width, ex_word_offset);
+        main_byte_enable = compute_byte_enable(de_ex_instr.memory_width, ex_word_offset, ex_access_part);
 
         // shift the store value into the correct position in the 64-bit word
-        main_write_data = de_ex_rs2_value << ex_word_offset*8;
+        main_write_data = ({ex_write_data, de_ex_rs2_value} << ex_word_offset*8) >> ex_access_part * 32;
+
+        // Stall earlier stages if not the last read
+        stall_for_multiple_access = (main_read_enable || main_write_enable) && ex_access_part != 1;
     end
 
     always_ff @(posedge clock)
@@ -262,6 +278,21 @@ module clarvi #(
                                                              :  ex_result;
                 ex_ma_word_offset <= ex_word_offset;
                 main_read_pending <= main_read_enable;
+                
+                if (de_ex_instr.memory_read || de_ex_instr.memory_write) begin
+                    $display("%s, %s", de_ex_instr.memory_read ? "READ" : "WRITE", de_ex_invalid ? "INVALID" : "");
+                    $display("Instr Part=%d, access_part=%d, stall_for_ma=%d", de_ex_instr.instr_part, ex_access_part, stall_for_multiple_access);
+                    $display("ex_mem_addr=0x%h, main_addr=0x%h, word_offset=%d", ex_mem_address, main_address, ex_word_offset);
+                    $display("ex_write_data=0x%h, rs2_value=0x%h, main_write_data=0x%h", ex_write_data, de_ex_rs2_value, main_write_data);
+                    $display("ex_ma_invalid=%d", ex_ma_invalid);
+                end
+
+                if (!de_ex_invalid && (de_ex_instr.memory_read || de_ex_instr.memory_write) && de_ex_instr.instr_part == 1) begin
+                    ex_access_part <= ex_access_part + 1;
+                    ex_ma_instr.instr_part <= ex_access_part;
+                end
+                else
+                    ex_access_part <= 0;
             end
         end
 
@@ -303,11 +334,19 @@ module clarvi #(
             // invalidate in an EX exception, interrupt, branch or load dependency stall.
             // an IF exception can only happen after a branch so this stage would already be invalid.
             if (!stall_de)  de_ex_invalid <= if_de_invalid || interrupt || ex_exception || ex_branch_taken;
-            else if (!stall_ex) de_ex_invalid <= 1; // we only stall de but not ex on load dep, so insert a bubble
+            // we only stall de but not ex on load dep, so insert a bubble, 
+            // ex_access_part distinguishes between load dep and multiple
+            // access
+            else if (!stall_ex && ex_access_part==1) de_ex_invalid <= 1; 
             
             // invalidate on an interrupt or any EX exception that could be caused by an instruction that writes back.
             // i.e. an exception on a load or an invalid instruction.
-            if (!stall_ex)  ex_ma_invalid <= de_ex_invalid || interrupt || ex_mem_address_error && de_ex_instr.memory_read || de_ex_instr.op == INVALID;
+            // Also invalidate lower parts of load instructions
+            if (!stall_ex)  ex_ma_invalid <= de_ex_invalid 
+                        || interrupt 
+                        || ex_mem_address_error && de_ex_instr.memory_read 
+                        || de_ex_instr.op == INVALID 
+                        || (de_ex_instr.memory_read || de_ex_instr.memory_write) && de_ex_instr.instr_part != 1;
             // we only stall ex and not ma when memory pending, so replay (no bubble here)
             
             // if ma received invalid data, insert a bubble into wb
@@ -476,13 +515,20 @@ module clarvi #(
 
     // === Decode functions ====================================================
 
-    function automatic logic [63:0] fetch(register_t register);
+    function automatic logic [31:0] fetch(register_t register, logic instr_part);
         // register zero is wired to constant 0.
-        return register == zero ? '0 : registers[register];
+        if (register == zero) return '0;
+        else begin
+            logic [63:0] value = registers[register];
+            case (instr_part)
+                1'b0: return value[31:0];
+                1'b1: return value[63:32];
+            endcase
+        end
     endfunction
 
 
-    function automatic instr_t decode_instr(logic [31:0] instr, logic [63:0] pc);
+    function automatic instr_t decode_instr(logic [31:0] instr, logic [63:0] pc, logic instr_part);
         // registers, funct7 and funct3 are in the same place in every instruction type
         decode_instr.rd  = register_t'(instr`rd);
         decode_instr.rs1 = register_t'(instr`rs1);
@@ -506,7 +552,11 @@ module clarvi #(
                               || instr`opcode == OPC_OP
                               || instr`opcode == OPC_OP_32);
 
-        {decode_instr.immediate_used, decode_instr.immediate} = decode_immediate(instr);
+        decode_instr.instr_part = (decode_instr.op == SRL 
+                                || decode_instr.op == SRA) ? ~instr_part
+                                                           :  instr_part;
+
+        {decode_instr.immediate_used, decode_instr.immediate} = decode_immediate(instr, decode_instr.instr_part);
 
         decode_instr.memory_write = instr`opcode == OPC_STORE;
         decode_instr.memory_read  = instr`opcode == OPC_LOAD;
@@ -592,28 +642,30 @@ module clarvi #(
         endcase
     endfunction
 
-    function automatic logic [64:0] decode_immediate(logic [31:0] instr);
+    function automatic logic [32:0] decode_immediate(logic [31:0] instr, logic instr_part);
         // returns an extra top bit to indicate whether the immediate is used
         // all except u-type instructions have sign-extended immediates.
-        logic [51:0] sign_ext_52 = {52{instr[31]}};
-        logic [43:0] sign_ext_44 = {44{instr[31]}};
+        logic [19:0] sign_ext_20 = {20{instr[31]}};
+        logic [11:0] sign_ext_12 = {12{instr[31]}};
         logic [31:0] sign_ext_32 = {32{instr[31]}};
+        logic upper = instr_part == 1;
         unique case (instr`opcode)
             OPC_JALR, OPC_LOAD, OPC_OP_IMM, OPC_OP_IMM_32: // i-type
-                return {1'b1, sign_ext_52, instr[31:20]};
+                return {1'b1, upper ? sign_ext_32 : {sign_ext_20, instr[31:20]}};
             OPC_STORE: // s-type
-                return {1'b1, sign_ext_52, instr[31:25], instr[11:7]};
+                return {1'b1, upper ? sign_ext_32 : {sign_ext_20, instr[31:25], instr[11:7]}};
             OPC_BRANCH: // sb-type
-                return {1'b1, sign_ext_52, instr[7], instr[30:25], instr[11:8], 1'b0};
+                return {1'b1, upper ? sign_ext_32 : {sign_ext_20, instr[7], instr[30:25], instr[11:8], 1'b0}};
             OPC_JAL: // uj-type
-                return {1'b1, sign_ext_44, instr[19:12], instr[20], instr[30:21], 1'b0};
+                return {1'b1, upper ? sign_ext_32 : {sign_ext_12, instr[19:12], instr[20], instr[30:21], 1'b0}};
             OPC_LUI, OPC_AUIPC: // u-type
-                return {1'b1, sign_ext_32, instr[31:12], 12'b0};
+                return {1'b1, upper ? sign_ext_32 : {instr[31:12], 12'b0}};
             OPC_SYSTEM: // no ordinary immediate but possibly a csr zimm (5-bit immediate)
-                return {instr[14], 64'bx};
+                return {instr[14], 32'bx};
             default: // no immediate
-                return {1'b0, 64'bx};
+                return {1'b0, 32'bx};
         endcase
+
     endfunction
 
     function automatic logic validate_csr_op(logic write, csr_t csr);
@@ -702,12 +754,13 @@ module clarvi #(
 
     // === Memory Access functions =============================================
 
-    function automatic logic [7:0] compute_byte_enable(mem_width_t width, logic [2:0] word_offset);
+    function automatic logic [3:0] compute_byte_enable(mem_width_t width, logic [1:0] word_offset, logic access_part);
+        //right shift to handle the case that we are loading the upper bits
         unique case (width)
-            B: return 8'b00000001 << word_offset;
-            H: return 8'b00000011 << word_offset;
-            W: return 8'b00001111 << word_offset;
-            D: return 8'b11111111 << word_offset;
+            B: return (8'b00000001 << word_offset) >> access_part * 4;
+            H: return (8'b00000011 << word_offset) >> access_part * 4;
+            W: return (8'b00001111 << word_offset) >> access_part * 4;
+            D: return (8'b11111111 << word_offset) >> access_part * 4;
             default: return 'x;
         endcase
     endfunction

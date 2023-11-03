@@ -84,7 +84,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
         csr_t csr = csr_t'(db_instr.funct12);
 
         // first output the PC
-        $write("0x%h:   ", db_instr.pc);
+        $write("0x%h:%d:   ", db_instr.pc, db_instr.instr_part);
 
         if (db_invalid) begin
             // the stage is invalid (e.g. because we took a branch)
