@@ -408,14 +408,12 @@ module clarvi #(
         // now we also check whether source and destination registers match up
         // prioritise forwarding from earlier stages (more recent instructions),
         // since these may overwrite values written by later stages (less recent instructions).
-        if      (could_forward_from_ex && de_ex_instr.rd == de_instr.rs1) de_rs1_forward = de_ex_instr.is32_bit_op ? ex_result_sign_ext 
-                                                                                                                   : ex_result;
+        if      (could_forward_from_ex && de_ex_instr.rd == de_instr.rs1) de_rs1_forward = ex_result;
         else if (could_forward_from_ma && ex_ma_instr.rd == de_instr.rs1) de_rs1_forward = ma_result;
         else if (could_forward_from_wb && ma_wb_instr.rd == de_instr.rs1) de_rs1_forward = ma_wb_value;
         else                                                              de_rs1_forward = de_rs1_fetched;
 
-        if      (could_forward_from_ex && de_ex_instr.rd == de_instr.rs2) de_rs2_forward = de_ex_instr.is32_bit_op ? ex_result_sign_ext 
-                                                                                                                   : ex_result;
+        if      (could_forward_from_ex && de_ex_instr.rd == de_instr.rs2) de_rs2_forward = ex_result;
         else if (could_forward_from_ma && ex_ma_instr.rd == de_instr.rs2) de_rs2_forward = ma_result;
         else if (could_forward_from_wb && ma_wb_instr.rd == de_instr.rs2) de_rs2_forward = ma_wb_value;
         else                                                              de_rs2_forward = de_rs2_fetched;
@@ -707,19 +705,19 @@ module clarvi #(
         logic [5:0] shift_amount = rs2_value_or_imm[5:0];
         logic [63:0] working_result; //to allow us to rearrange bits of result
 
-        if (instr.instr_part == 1 && instr.is_32_bit_op) return {32{state[0]}};
+        if (instr.instr_part == 1 && instr.is32_bit_op) return {32{state[0]}};
         else unique case (instr.op)
             ADD:   return rs1_value + rs2_value_or_imm + (instr.instr_part != 0 && state[0]);
             SUB:   return rs1_value + ~rs2_value + (instr.instr_part == 0 || state[0]);
             // SLT is a reverse instruction, result of comparison on the lower
             // bits is dependant on the result of a comparison on the upper bits
             SLT:   case (instr.instr_part)
-                    1'b0: state[0] || (!state[1] && ($signed(rs1_value) < $signed(rs2_value_or_imm))); 
-                    1'b1: return {rs1_value == rs2_value, $signed(rs1_value) < $signed(rs2_value_or_imm), 32'0};
+                    1'b0: return state[0] || (!state[1] && ($signed(rs1_value) < $signed(rs2_value_or_imm))); 
+                    1'b1: return {rs1_value == rs2_value, $signed(rs1_value) < $signed(rs2_value_or_imm), 32'b0};
                 endcase
             SLTU:  case (instr.instr_part)
-                    1'b0: state[0] || (!state[1] && (rs1_value < rs2_value_or_imm));
-                    1'b1: return {rs1_value == rs2_value, rs1_value < rs2_value_or_imm, 32'0};
+                    1'b0: return state[0] || (!state[1] && (rs1_value < rs2_value_or_imm));
+                    1'b1: return {rs1_value == rs2_value, rs1_value < rs2_value_or_imm, 32'b0};
                 endcase
             XOR:   return rs1_value ^ rs2_value_or_imm;
             OR:    return rs1_value | rs2_value_or_imm;
@@ -758,8 +756,8 @@ module clarvi #(
                 endcase
             // JAL(R) stores the address of the instruction that followed the jump
             JAL, JALR: case (instr.instr_part)
-                    1'b0 : return (instr.pc + 4)[31:0]; 
-                    1'b1 : return (instr.pc + 4)[63:32]; 
+                    1'b0 : return { instr.pc + 4 }[31:0]; 
+                    1'b1 : return { instr.pc + 4 }[63:32]; 
                 endcase
             CSRRW, CSRRS, CSRRC: case (instr.instr_part)
                     1'b0 : return read_csr(csr_t'(instr.funct12))[31:0]; 
