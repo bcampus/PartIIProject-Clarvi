@@ -230,15 +230,13 @@ module clarvi #(
 
     instr_t      ex_ma_instr;
     logic [63:0] ex_mem_address;
-    logic [31:0] ex_result, ex_result_sign_ext, ex_ma_result, ex_write_data;
+    logic [31:0] ex_result, ex_ma_result, ex_write_data, ex_state;
     logic ex_ext_value, ex_access_part; 
     logic [1:0]  ex_word_offset, ex_ma_word_offset;
     logic [61 -DATA_ADDR_WIDTH:0] ex_address_high_bits;  // beyond our address width so should be 0
 
     always_comb begin
-        ex_result = execute(de_ex_instr, de_ex_rs1_value, de_ex_rs2_value);
-
-        ex_result_sign_ext = {32{ex_ext_value}};
+        {ex_result, ex_state} = execute(de_ex_instr, de_ex_rs1_value, de_ex_rs2_value, ex_state);
 
         // --- Memory Access ---------------------------------------------------
 
@@ -274,8 +272,7 @@ module clarvi #(
         end else begin
             if (!stall_ex) begin
                 ex_ma_instr       <= de_ex_instr;
-                ex_ma_result      <= de_ex_instr.is32_bit_op ? ex_result_sign_ext 
-                                                             :  ex_result;
+                ex_ma_result      <=  ex_result;
                 ex_ma_word_offset <= ex_word_offset;
                 main_read_pending <= main_read_enable;
                 
@@ -552,9 +549,17 @@ module clarvi #(
                               || instr`opcode == OPC_OP
                               || instr`opcode == OPC_OP_32);
 
-        decode_instr.instr_part = (decode_instr.op == SRL 
-                                || decode_instr.op == SRA) ? ~instr_part
-                                                           :  instr_part;
+        //Following instructions require going down the pipeline in reverse
+        //order
+        decode_instr.instr_part = (decode_instr.op == SRL && !decode_instr.is32_bit_op
+                                || decode_instr.op == SRA && !decode_instr.is32_bit_op
+                                || decode_instr.op == SLT
+                                || decode_instr.op == SLTU
+                                || decode_instr.op == BLT
+                                || decode_instr.op == BLTU
+                                || decode_instr.op == BGE
+                                || decode_instr.op == BGEU) ? ~instr_part
+                                                            :  instr_part;
 
         {decode_instr.immediate_used, decode_instr.immediate} = decode_immediate(instr, decode_instr.instr_part);
 
@@ -691,34 +696,75 @@ module clarvi #(
 
     // === Execute functions ===================================================
 
-    function automatic logic [63:0] execute(instr_t instr, logic [63:0] rs1_value, logic [63:0] rs2_value);
+    function automatic logic [63:0] execute(instr_t instr, logic [31:0] rs1_value, logic [31:0] rs2_value, logic [31:0] state);
 
-        logic [63:0] rs2_value_or_imm = instr.immediate_used ? instr.immediate : rs2_value;
+        logic [31:0] rs2_value_or_imm = instr.immediate_used ? instr.immediate : rs2_value;
 
         // implement both logical and arithmetic as an arithmetic right shift, with a 33rd bit set to 0 or 1 as required.
         // logic signed [32:0] rshift_operand = {(instr.funct7_bit & rs1_value[31]), rs1_value};
 
         // shifts use the lower 5 bits of the intermediate or rs2 value
         logic [5:0] shift_amount = rs2_value_or_imm[5:0];
+        logic [63:0] working_result; //to allow us to rearrange bits of result
 
-        unique case (instr.op)
-            ADD:   return rs1_value + rs2_value_or_imm;
-            SUB:   return rs1_value - rs2_value;
-            SLT:   return $signed(rs1_value) < $signed(rs2_value_or_imm);
-            SLTU:  return rs1_value < rs2_value_or_imm;
+        if (instr.instr_part == 1 && instr.is_32_bit_op) return {32{state[0]}};
+        else unique case (instr.op)
+            ADD:   return rs1_value + rs2_value_or_imm + (instr.instr_part != 0 && state[0]);
+            SUB:   return rs1_value + ~rs2_value + (instr.instr_part == 0 || state[0]);
+            // SLT is a reverse instruction, result of comparison on the lower
+            // bits is dependant on the result of a comparison on the upper bits
+            SLT:   case (instr.instr_part)
+                    1'b0: state[0] || (!state[1] && ($signed(rs1_value) < $signed(rs2_value_or_imm))); 
+                    1'b1: return {rs1_value == rs2_value, $signed(rs1_value) < $signed(rs2_value_or_imm), 32'0};
+                endcase
+            SLTU:  case (instr.instr_part)
+                    1'b0: state[0] || (!state[1] && (rs1_value < rs2_value_or_imm));
+                    1'b1: return {rs1_value == rs2_value, rs1_value < rs2_value_or_imm, 32'0};
+                endcase
             XOR:   return rs1_value ^ rs2_value_or_imm;
             OR:    return rs1_value | rs2_value_or_imm;
             AND:   return rs1_value & rs2_value_or_imm;
-            SL:    return rs1_value << shift_amount;
-            SRL:   return instr.is32_bit_op ? rs1_value[31:0] >> shift_amount 
-                                            : rs1_value >> shift_amount;
-            SRA:   return instr.is32_bit_op ? $signed(rs1_value[31:0]) >>> shift_amount
-                                            : $signed(rs1_value) >>> shift_amount;
+            SL:    return ({32'b0, rs1_value} << shift_amount) || (instr.instr_part != 0 ? state : 0);
+            SRL:   case (instr.instr_part)
+                    1'b1: begin
+                        working_result = { rs1_value, 32'b0 } >> shift_amount;
+                        return { working_result[31:0], working_result[63:32] };
+                    end
+                    1'b0: begin
+                        if (instr.is32_bit_op) begin
+                            working_result = { 32'b0, rs1_value >> shift_amount };
+                            return { 31'b0, working_result[31], working_result[31:0] }; //sets sign ext. bit
+                        end
+                        else return {32'b0, state || (rs1_value >> shift_amount) }; //combine with underflow from upper bits
+                    end
+                endcase
+            SRA:   case (instr.instr_part)
+                    1'b1: begin
+                        working_result = $signed({ rs1_value, 32'b0 }) >>> shift_amount ;
+                        return { working_result[31:0], working_result[63:32] };
+                    end
+                    1'b0: begin
+                        if (instr.is32_bit_op) begin
+                            working_result = { 32'b0, $signed(rs1_value) >>> shift_amount };
+                            return { 31'b0, working_result[31], working_result[31:0] }; //sets sign ext. bit
+                        end
+                        else return {32'b0, state || (rs1_value >> shift_amount) }; //combine with underflow from upper bits
+                    end
+                endcase
             LUI:   return instr.immediate;
-            AUIPC: return instr.immediate + instr.pc;
+            AUIPC: case (instr.instr_part)
+                    1'b0 : return instr.immediate + instr.pc[31:0];
+                    1'b1 : return instr.immediate + instr.pc[63:32] + state[0];
+                endcase
             // JAL(R) stores the address of the instruction that followed the jump
-            JAL, JALR: return instr.pc + 4;
-            CSRRW, CSRRS, CSRRC: return read_csr(csr_t'(instr.funct12));
+            JAL, JALR: case (instr.instr_part)
+                    1'b0 : return (instr.pc + 4)[31:0]; 
+                    1'b1 : return (instr.pc + 4)[63:32]; 
+                endcase
+            CSRRW, CSRRS, CSRRC: case (instr.instr_part)
+                    1'b0 : return read_csr(csr_t'(instr.funct12))[31:0]; 
+                    1'b1 : return read_csr(csr_t'(instr.funct12))[63:32]; 
+                endcase
             default: return 'x;
         endcase
     endfunction
