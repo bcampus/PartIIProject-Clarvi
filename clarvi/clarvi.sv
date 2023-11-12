@@ -230,13 +230,13 @@ module clarvi #(
 
     instr_t      ex_ma_instr;
     logic [63:0] ex_mem_address;
-    logic [31:0] ex_result, ex_ma_result, ex_write_data, ex_state;
+    logic [31:0] ex_result, ex_ma_result, ex_write_data, ex_state, ex_next_state;
     logic ex_ext_value, ex_access_part; 
     logic [1:0]  ex_word_offset, ex_ma_word_offset;
     logic [61 -DATA_ADDR_WIDTH:0] ex_address_high_bits;  // beyond our address width so should be 0
 
     always_comb begin
-        {ex_result, ex_state} = execute(de_ex_instr, de_ex_rs1_value, de_ex_rs2_value, ex_state);
+        {ex_next_state, ex_result} = execute(de_ex_instr, de_ex_rs1_value, de_ex_rs2_value, ex_state);
 
         // --- Memory Access ---------------------------------------------------
 
@@ -274,6 +274,7 @@ module clarvi #(
                 ex_ma_instr       <= de_ex_instr;
                 ex_ma_result      <=  ex_result;
                 ex_ma_word_offset <= ex_word_offset;
+                ex_state          <= ex_next_state;
                 main_read_pending <= main_read_enable;
                 
                 if (de_ex_instr.memory_read || de_ex_instr.memory_write) begin
@@ -295,12 +296,12 @@ module clarvi #(
 
     // === Branching or Reset ==================================================
 
-    logic ex_branch_taken;
+    logic ex_branch_taken, ex_branch_state;
     logic [63:0] ex_branch_target, ex_next_pc;
 
     always_comb begin
-        ex_branch_taken = !de_ex_invalid && is_branch_taken(de_ex_instr.op, de_ex_rs1_value, de_ex_rs2_value);
-        ex_branch_target = target_pc(de_ex_instr, de_ex_rs1_value);
+        ex_branch_taken = !de_ex_invalid && is_branch_taken(de_ex_instr, de_ex_rs1_value, de_ex_rs2_value, ex_branch_state);
+        ex_branch_target = target_pc(de_ex_instr, de_ex_rs1_value, ex_branch_target);
         ex_next_pc = ex_branch_taken ? ex_branch_target : pc + 4; //note that pc + 4 is actually a prediction for 3 instructions' time
     end
 
@@ -319,6 +320,7 @@ module clarvi #(
             if (!stall_if) begin
                 // if a trap is taken, go to the handler instead
                 pc <= (if_exception || ex_exception) ? mtvec : ex_next_pc;
+                ex_branch_state <= ex_branch_taken;
             
                 // invalidate on any exception, interrupt or branch.
                 if_invalid <= interrupt || ex_exception || if_exception || ex_branch_taken;
@@ -408,14 +410,16 @@ module clarvi #(
         // now we also check whether source and destination registers match up
         // prioritise forwarding from earlier stages (more recent instructions),
         // since these may overwrite values written by later stages (less recent instructions).
-        if      (could_forward_from_ex && de_ex_instr.rd == de_instr.rs1) de_rs1_forward = ex_result;
-        else if (could_forward_from_ma && ex_ma_instr.rd == de_instr.rs1) de_rs1_forward = ma_result;
-        else if (could_forward_from_wb && ma_wb_instr.rd == de_instr.rs1) de_rs1_forward = ma_wb_value;
+        // Also check current part of the instruction in decode stage
+        // corellates to the part we are forwarding from.
+        if      (could_forward_from_ex && de_ex_instr.rd == de_instr.rs1 && de_ex_instr.instr_part == de_instr.instr_part) de_rs1_forward = ex_result;
+        else if (could_forward_from_ma && ex_ma_instr.rd == de_instr.rs1 && ex_ma_instr.instr_part == de_instr.instr_part) de_rs1_forward = ma_result;
+        else if (could_forward_from_wb && ma_wb_instr.rd == de_instr.rs1 && ma_wb_instr.instr_part == de_instr.instr_part) de_rs1_forward = ma_wb_value;
         else                                                              de_rs1_forward = de_rs1_fetched;
 
-        if      (could_forward_from_ex && de_ex_instr.rd == de_instr.rs2) de_rs2_forward = ex_result;
-        else if (could_forward_from_ma && ex_ma_instr.rd == de_instr.rs2) de_rs2_forward = ma_result;
-        else if (could_forward_from_wb && ma_wb_instr.rd == de_instr.rs2) de_rs2_forward = ma_wb_value;
+        if      (could_forward_from_ex && de_ex_instr.rd == de_instr.rs2 && de_ex_instr.instr_part == de_instr.instr_part) de_rs2_forward = ex_result;
+        else if (could_forward_from_ma && ex_ma_instr.rd == de_instr.rs2 && ex_ma_instr.instr_part == de_instr.instr_part) de_rs2_forward = ma_result;
+        else if (could_forward_from_wb && ma_wb_instr.rd == de_instr.rs2 && ma_wb_instr.instr_part == de_instr.instr_part) de_rs2_forward = ma_wb_value;
         else                                                              de_rs2_forward = de_rs2_fetched;
     end
 
@@ -768,14 +772,20 @@ module clarvi #(
     endfunction
 
 
-    function automatic logic is_branch_taken(operation_t operation, logic [63:0] rs1_value, logic [63:0] rs2_value);
-        unique case (operation)
-            BEQ:  return rs1_value == rs2_value;
-            BNE:  return rs1_value != rs2_value;
-            BGEU: return rs1_value >= rs2_value;
-            BLTU: return rs1_value <  rs2_value;
-            BGE:  return $signed(rs1_value) >= $signed(rs2_value);
-            BLT:  return $signed(rs1_value) <  $signed(rs2_value);
+    function automatic logic is_branch_taken(instr_t instr, logic [63:0] rs1_value, logic [63:0] rs2_value, logic state);
+        unique case (instr.op)
+            BEQ:  return rs1_value == rs2_value && (instr.instr_part == 0 || state);
+            BNE:  return rs1_value != rs2_value || (instr.instr_part != 0 && state);
+            BGEU: return rs1_value > rs2_value || (rs1_value == rs2_value && (instr.instr_part == 0 || state)); 
+            BLTU: return rs1_value < rs2_value || (rs1_value == rs2_value && (instr.instr_part != 0 && state));
+            BGE: case(instr.instr_part)
+                1'b0: return rs1_value >= rs2_value;
+                1'b1: return $signed(rs1_value) > $signed(rs2_value) || (rs1_value == rs2_value && state);
+            endcase
+            BLT:  case(instr.instr_part)
+                1'b0: return rs1_value < rs2_value;
+                1'b1: return $signed(rs1_value) < $signed(rs2_value) || (rs1_value == rs2_value && state);
+            endcase
             // we implement fence.i (sync instruction and data memory) by doing a branch to reload the next instruction
             JAL, JALR, FENCE_I, MRET: return '1;
             default: return '0;
@@ -783,10 +793,16 @@ module clarvi #(
     endfunction
 
 
-    function automatic logic [63:0] target_pc(instr_t instr, logic [63:0] rs1_value);
+    function automatic logic [63:0] target_pc(instr_t instr, logic [31:0] rs1_value, logic [63:0] state);
         unique case (instr.op)
-            JAL, BEQ, BNE, BLT, BGE, BLTU, BGEU: return instr.pc + instr.immediate;
-            JALR:    return (rs1_value + instr.immediate) & 32'h_ff_ff_ff_fe; // set LSB to 0
+            JAL, BEQ, BNE, BLT, BGE, BLTU, BGEU: case (instr.instr_part)
+                1'b0: return {31'b0, instr.pc[31:0] + instr.immediate};
+                1'b1: return { instr.pc[63:32] + instr.immediate + state[32], state[31:0] };
+            endcase
+            JALR: case (instr.instr_part)
+                1'b0: return {31'b0, (rs1_value + instr.immediate) & 32'h_ff_ff_ff_fe}; // set LSB to 0
+                1'b1: return {rs1_value + instr.immediate + state[32], state[31:0]} ; // set LSB to 0
+            endcase
             FENCE_I: return instr.pc + 4;
 `ifdef MACHINE_MODE
             MRET:    return mepc;  // return from interrupt handler
