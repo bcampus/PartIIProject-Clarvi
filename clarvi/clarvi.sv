@@ -278,6 +278,7 @@ module clarvi #(
                 ex_write_data_upper <= de_ex_rs2_value; 
                 main_read_pending   <= main_read_enable;
                 
+                /*
                 if (de_ex_instr.memory_read || de_ex_instr.memory_write) begin
                     $display("%s, %s", de_ex_instr.memory_read ? "READ" : "WRITE", de_ex_invalid ? "INVALID" : "");
                     $display("Instr Part=%d, access_part=%d, stall_for_ma=%d", de_ex_instr.instr_part, ex_access_part, stall_for_multiple_access);
@@ -285,6 +286,7 @@ module clarvi #(
                     $display("ex_write_data=0x%h, rs2_value=0x%h, main_write_data=0x%h", ex_write_data_upper, de_ex_rs2_value, main_write_data);
                     $display("ex_ma_invalid=%d", ex_ma_invalid);
                 end
+                */
 
                 if (!de_ex_invalid && (de_ex_instr.memory_read || de_ex_instr.memory_write) && de_ex_instr.instr_part == 1) begin
                     ex_access_part <= ex_access_part + 1;
@@ -357,14 +359,17 @@ module clarvi #(
     // === Memory Align ========================================================
 
     instr_t ma_wb_instr;
-    logic[63:0] ma_result, ma_load_value, ma_wb_value;
+    logic[31:0] ma_result, ma_load_value, ma_wb_value;
+    logic ma_carry;
 
     always_comb begin
         // align the loaded value: if we stalled on last cycle then take buffered data instead
-        ma_load_value = load_shift_mask_extend(ex_ma_instr.memory_width,
+        ma_load_value = load_shift_mask_extend(ex_ma_instr.instr_part,
+                                               ex_ma_instr.memory_width,
                                                ex_ma_instr.memory_read_unsigned,
                                                main_read_data_valid ? main_read_data : main_read_data_buffer,
-                                               ex_ma_word_offset);
+                                               ex_ma_word_offset,
+                                               ma_carry);
         // if this isn't a load instruction, pass through the ALU result instead
         ma_result = ex_ma_instr.memory_read ? ma_load_value : ex_ma_result;
     end
@@ -374,6 +379,7 @@ module clarvi #(
             main_read_data_buffer_valid <= 0;
         end else begin
             if (!stall_ma) begin
+                  ma_carry    <= ma_load_value[31];
                   ma_wb_instr <= ex_ma_instr;
                   ma_wb_value <= ma_result;
                   main_read_data_buffer_valid <= 0;
@@ -391,7 +397,10 @@ module clarvi #(
     always_ff @(posedge clock) begin
         if (!stall_wb && !ma_wb_invalid) begin
             if (ma_wb_instr.enable_wb) begin
-                registers[ma_wb_instr.rd] <= ma_wb_value;
+                case (ma_wb_instr.instr_part)
+                    1'b0: registers[ma_wb_instr.rd][31:0] <= ma_wb_value;
+                    1'b1: registers[ma_wb_instr.rd][63:32] <= ma_wb_value;
+                endcase
             end
             instret <= instret + 1;
         end
@@ -827,28 +836,33 @@ module clarvi #(
         endcase
     endfunction
 
-    function automatic logic [63:0] load_shift_mask_extend(mem_width_t width, logic is_unsigned, logic [63:0] value, logic [2:0] word_offset);
-        logic [63:0] masked_value = load_mask(width, value, word_offset);
+    function automatic logic [31:0] load_shift_mask_extend(logic part, 
+                                                    mem_width_t width, 
+                                                    logic is_unsigned, 
+                                                    logic [31:0] value, 
+                                                    logic [1:0] word_offset, 
+                                                    logic carry);
+        logic [31:0] masked_value = load_mask(width, value, word_offset);
+        if (width != D && part == 1) return {32{(~is_unsigned) && carry}};
+        else
         unique case (width)
             B: return is_unsigned
-                    ? {56'b0, masked_value[7:0]}
-                    : {{56{masked_value[7]}}, masked_value[7:0]};
+                    ? {24'b0, masked_value[7:0]}
+                    : {{24{masked_value[7]}}, masked_value[7:0]};
             H: return is_unsigned
-                    ? {48'b0, masked_value[15:0]}
-                    : {{48{masked_value[15]}}, masked_value[15:0]};
-            W: return is_unsigned
-                    ? {32'b0, masked_value[31:0]}
-                    : {{32{masked_value[31]}}, masked_value[31:0]};
+                    ? {16'b0, masked_value[15:0]}
+                    : {{16{masked_value[15]}}, masked_value[15:0]};
+            W: return masked_value;
             D: return value;
             default: return 'x;
         endcase
     endfunction
 
-    function automatic logic [63:0] load_mask(mem_width_t width, logic [63:0] value, logic [2:0] word_offset);
+    function automatic logic [31:0] load_mask(mem_width_t width, logic [31:0] value, logic [1:0] word_offset);
         unique case (width)
-            B: return (value >> word_offset*8) & 64'h_00_00_00_00_00_00_00_ff;
-            H: return (value >> word_offset*8) & 64'h_00_00_00_00_00_00_ff_ff;
-            W: return (value >> word_offset*8) & 64'h_00_00_00_00_ff_ff_ff_ff;
+            B: return (value >> word_offset*8) & 32'h_00_00_00_ff;
+            H: return (value >> word_offset*8) & 32'h_00_00_ff_ff;
+            W: return (value >> word_offset*8) & 32'h_ff_ff_ff_ff;
             default: return 'x;
         endcase
     endfunction
