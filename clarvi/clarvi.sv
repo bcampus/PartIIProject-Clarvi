@@ -230,7 +230,8 @@ module clarvi #(
 
     instr_t      ex_ma_instr;
     logic [63:0] ex_mem_address;
-    logic [31:0] ex_result, ex_ma_result, ex_write_data, ex_state, ex_next_state;
+    logic [32:0] ex_mem_addr_state;
+    logic [31:0] ex_result, ex_ma_result, ex_write_data_upper, ex_state, ex_next_state;
     logic ex_ext_value, ex_access_part; 
     logic [1:0]  ex_word_offset, ex_ma_word_offset;
     logic [61 -DATA_ADDR_WIDTH:0] ex_address_high_bits;  // beyond our address width so should be 0
@@ -246,11 +247,9 @@ module clarvi #(
         // do address calculation, using bit 32 to propagate carry between
         // adds
         case (de_ex_instr.instr_part)
-            1'b0: begin
-                ex_mem_address[32:0] = de_ex_rs1_value + de_ex_instr.immediate;
-                ex_write_data = de_ex_rs2_value; 
-            end
-            1'b1: ex_mem_address[63:32] = de_ex_rs1_value + de_ex_instr.immediate + ex_mem_address[32]; 
+            1'b0: ex_mem_address = de_ex_rs1_value + de_ex_instr.immediate;
+            1'b1: ex_mem_address = {de_ex_rs1_value + de_ex_instr.immediate + ex_mem_addr_state[32],
+                                    ex_mem_addr_state[31:0]}; 
         endcase
         // our memory is word addressed, so cut off the bottom two bits (this becomes the word offset),
         // and the higher bits beyond our address range which should be 0.
@@ -260,7 +259,7 @@ module clarvi #(
         main_byte_enable = compute_byte_enable(de_ex_instr.memory_width, ex_word_offset, ex_access_part);
 
         // shift the store value into the correct position in the 64-bit word
-        main_write_data = ({ex_write_data, de_ex_rs2_value} << ex_word_offset*8) >> ex_access_part * 32;
+        main_write_data = ({ex_write_data_upper, de_ex_rs2_value} << ex_word_offset*8) >> ex_access_part * 32;
 
         // Stall earlier stages if not the last read
         stall_for_multiple_access = (main_read_enable || main_write_enable) && ex_access_part != 1;
@@ -271,17 +270,19 @@ module clarvi #(
             main_read_pending <= 0;
         end else begin
             if (!stall_ex) begin
-                ex_ma_instr       <= de_ex_instr;
-                ex_ma_result      <=  ex_result;
-                ex_ma_word_offset <= ex_word_offset;
-                ex_state          <= ex_next_state;
-                main_read_pending <= main_read_enable;
+                ex_ma_instr         <= de_ex_instr;
+                ex_ma_result        <=  ex_result;
+                ex_ma_word_offset   <= ex_word_offset;
+                ex_state            <= ex_next_state;
+                ex_mem_addr_state   <= ex_mem_address;
+                ex_write_data_upper <= de_ex_rs2_value; 
+                main_read_pending   <= main_read_enable;
                 
                 if (de_ex_instr.memory_read || de_ex_instr.memory_write) begin
                     $display("%s, %s", de_ex_instr.memory_read ? "READ" : "WRITE", de_ex_invalid ? "INVALID" : "");
                     $display("Instr Part=%d, access_part=%d, stall_for_ma=%d", de_ex_instr.instr_part, ex_access_part, stall_for_multiple_access);
                     $display("ex_mem_addr=0x%h, main_addr=0x%h, word_offset=%d", ex_mem_address, main_address, ex_word_offset);
-                    $display("ex_write_data=0x%h, rs2_value=0x%h, main_write_data=0x%h", ex_write_data, de_ex_rs2_value, main_write_data);
+                    $display("ex_write_data=0x%h, rs2_value=0x%h, main_write_data=0x%h", ex_write_data_upper, de_ex_rs2_value, main_write_data);
                     $display("ex_ma_invalid=%d", ex_ma_invalid);
                 end
 
@@ -297,11 +298,11 @@ module clarvi #(
     // === Branching or Reset ==================================================
 
     logic ex_branch_taken, ex_branch_state;
-    logic [63:0] ex_branch_target, ex_next_pc;
+    logic [63:0] ex_branch_target, ex_branch_target_state, ex_next_pc;
 
     always_comb begin
         ex_branch_taken = !de_ex_invalid && is_branch_taken(de_ex_instr, de_ex_rs1_value, de_ex_rs2_value, ex_branch_state);
-        ex_branch_target = target_pc(de_ex_instr, de_ex_rs1_value, ex_branch_target);
+        ex_branch_target = target_pc(de_ex_instr, de_ex_rs1_value, ex_branch_target_state);
         ex_next_pc = ex_branch_taken ? ex_branch_target : pc + 4; //note that pc + 4 is actually a prediction for 3 instructions' time
     end
 
@@ -321,6 +322,7 @@ module clarvi #(
                 // if a trap is taken, go to the handler instead
                 pc <= (if_exception || ex_exception) ? mtvec : ex_next_pc;
                 ex_branch_state <= ex_branch_taken;
+                ex_branch_target_state <= ex_branch_target;
             
                 // invalidate on any exception, interrupt or branch.
                 if_invalid <= interrupt || ex_exception || if_exception || ex_branch_taken;
