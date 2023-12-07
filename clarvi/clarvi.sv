@@ -299,13 +299,14 @@ module clarvi #(
 
     // === Branching or Reset ==================================================
 
-    logic ex_branch_taken, ex_branch_state;
+    logic ex_branch_taken, ex_branch_state, ex_branch_next_state;
     logic [63:0] ex_branch_target, ex_branch_target_state, ex_next_pc;
 
     always_comb begin
-        ex_branch_taken = !de_ex_invalid && is_branch_taken(de_ex_instr, de_ex_rs1_value, de_ex_rs2_value, ex_branch_state);
+        ex_branch_next_state = !de_ex_invalid && is_branch_taken(de_ex_instr, de_ex_rs1_value, de_ex_rs2_value, ex_branch_state);
+        ex_branch_taken = de_ex_instr.instr_part == 1 && ex_branch_next_state;
         ex_branch_target = target_pc(de_ex_instr, de_ex_rs1_value, ex_branch_target_state);
-        ex_next_pc = ex_branch_taken ? ex_branch_target : pc + 4; //note that pc + 4 is actually a prediction for 3 instructions' time
+        ex_next_pc = (de_ex_instr.instr_part == 1 && ex_branch_taken) ? ex_branch_target : pc + 4; //note that pc + 4 is actually a prediction for 3 instructions' time
     end
 
     always_ff @(posedge clock)
@@ -319,12 +320,12 @@ module clarvi #(
         end else begin
             // logic for stage invalidation upon taking a branch or stalling
             // don't change the registers if the corresponding stage is stalled
+            ex_branch_state <= ex_branch_next_state;
+            ex_branch_target_state <= ex_branch_target;
             
             if (!stall_if) begin
                 // if a trap is taken, go to the handler instead
                 pc <= (if_exception || ex_exception) ? mtvec : ex_next_pc;
-                ex_branch_state <= ex_branch_taken;
-                ex_branch_target_state <= ex_branch_target;
             
                 // invalidate on any exception, interrupt or branch.
                 if_invalid <= interrupt || ex_exception || if_exception || ex_branch_taken;
@@ -333,10 +334,16 @@ module clarvi #(
                 // an IF exception can only happen after a branch so this stage would already be invalid.
                 if_de_invalid <= if_invalid || interrupt || ex_exception || ex_branch_taken;
             end
+            else if (ex_branch_taken) begin
+                pc <= ex_next_pc;
+
+                if_invalid <= '1;
+                if_de_invalid <= '1;
+            end
          
             // invalidate in an EX exception, interrupt, branch or load dependency stall.
             // an IF exception can only happen after a branch so this stage would already be invalid.
-            if (!stall_de)  de_ex_invalid <= if_de_invalid || interrupt || ex_exception || ex_branch_taken;
+            if (!stall_de)  de_ex_invalid <= if_de_invalid || interrupt || ex_exception || (de_ex_instr.instr_part == 1 && ex_branch_taken);
             // we only stall de but not ex on load dep, so insert a bubble, 
             // ex_access_part distinguishes between load dep and multiple
             // access
@@ -783,7 +790,7 @@ module clarvi #(
     endfunction
 
 
-    function automatic logic is_branch_taken(instr_t instr, logic [63:0] rs1_value, logic [63:0] rs2_value, logic state);
+    function automatic logic is_branch_taken(instr_t instr, logic [31:0] rs1_value, logic [31:0] rs2_value, logic state);
         unique case (instr.op)
             BEQ:  return rs1_value == rs2_value && (instr.instr_part == 0 || state);
             BNE:  return rs1_value != rs2_value || (instr.instr_part != 0 && state);
@@ -807,11 +814,11 @@ module clarvi #(
     function automatic logic [63:0] target_pc(instr_t instr, logic [31:0] rs1_value, logic [63:0] state);
         unique case (instr.op)
             JAL, BEQ, BNE, BLT, BGE, BLTU, BGEU: case (instr.instr_part)
-                1'b0: return {31'b0, instr.pc[31:0] + instr.immediate};
+                1'b0: return {32'b0, instr.pc[31:0]} + instr.immediate;
                 1'b1: return { instr.pc[63:32] + instr.immediate + state[32], state[31:0] };
             endcase
             JALR: case (instr.instr_part)
-                1'b0: return {31'b0, (rs1_value + instr.immediate) & 32'h_ff_ff_ff_fe}; // set LSB to 0
+                1'b0: return  ({32'b0, rs1_value} + instr.immediate) & 64'h_00_00_00_01_ff_ff_ff_fe; // set LSB to 0
                 1'b1: return {rs1_value + instr.immediate + state[32], state[31:0]} ; // set LSB to 0
             endcase
             FENCE_I: return instr.pc + 4;
@@ -900,28 +907,27 @@ module clarvi #(
     endfunction
 
 `ifdef MACHINE_MODE
-    `define write_csr(operation, value, csr) \
+    `define write_csr(operation, part, value, csr) \
         case (operation)                     \
-            CSRRW: csr <= value;             \
-            CSRRS: csr <= csr | value;       \
-            CSRRC: csr <= csr & ~value;      \
+            CSRRW: case (part) 0: csr[31:0] <= value;              1: csr[63:32] <= value;               endcase \
+            CSRRS: case (part) 0: csr[31:0] <= csr[31:0] | value;  1: csr[63:32] <= csr[63:32] | value;  endcase \
+            CSRRC: case (part) 0: csr[31:0] <= csr[31:0] & ~value; 1: csr[63:32] <= csr[63:32] & ~value; endcase \
         endcase
 
-    task automatic execute_csr(instr_t instr, logic [63:0] rs1_value);
+    task automatic execute_csr(instr_t instr, logic [31:0] rs1_value);
         // for immediate versions of the CSR instructions, the rs1 field contains a 5-bit immediate.
-        logic[63:0] value = instr.immediate_used ? instr.rs1 : rs1_value;
+        logic[31:0] value = instr.immediate_used ? instr.rs1 : rs1_value;
         logic[11:0] csr_addr = instr.funct12;
         case (csr_addr)
-            MTVEC:     `write_csr(instr.op, value, mtvec)
-            MSTATUS:   `write_csr(instr.op, value, mstatus)
-            MIE:       `write_csr(instr.op, value, mie)
-            MSCRATCH:  `write_csr(instr.op, value, mscratch)
-            MEPC:      `write_csr(instr.op, value, mepc)
-            MCAUSE:    `write_csr(instr.op, value, mcause)
-            MBADADDR:  `write_csr(instr.op, value, mbadaddr)
-            MTIMECMP:  `write_csr(instr.op, value, timecmp[31:0])
-            MTIMECMPH: `write_csr(instr.op, value, timecmp[63:32])
-            DSCRATCH,DOUTHEX,DOUTCHAR,DOUTINT:  `write_csr(instr.op, value, dscratch)
+            MTVEC:     `write_csr(instr.op, instr.instr_part, value, mtvec)
+            MSTATUS:   `write_csr(instr.op, instr.instr_part, value, mstatus)
+            MIE:       `write_csr(instr.op, instr.instr_part, value, mie)
+            MSCRATCH:  `write_csr(instr.op, instr.instr_part, value, mscratch)
+            MEPC:      `write_csr(instr.op, instr.instr_part, value, mepc)
+            MCAUSE:    `write_csr(instr.op, instr.instr_part, value, mcause)
+            MBADADDR:  `write_csr(instr.op, instr.instr_part, value, mbadaddr)
+            MTIMECMP:  `write_csr(instr.op, instr.instr_part, value, timecmp)
+            DSCRATCH,DOUTHEX,DOUTCHAR,DOUTINT:  `write_csr(instr.op, instr.instr_part, value, dscratch)
         endcase
     endtask
 
