@@ -30,15 +30,17 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
             case (ex_ma_instr.op)
                 CSRRW, CSRRS, CSRRC:
                 begin
-                    // catch writes to dscratch and output them
-                    if (ex_ma_instr.funct12 == DSCRATCH)
-                        $display("Debug output: %s = 0x%h", ex_ma_instr.rs1, dscratch);
-                    if (ex_ma_instr.funct12 == DOUTHEX)
-                        $write("0x%h", dscratch);
-                    if (ex_ma_instr.funct12 == DOUTCHAR)
-                        $write("%c", dscratch);
-                    if (ex_ma_instr.funct12 == DOUTINT)
-                        $write("%d", dscratch);
+                    if (ex_ma_instr.instr_part == 1) begin
+                        // catch writes to dscratch and output them
+                        if (ex_ma_instr.funct12 == DSCRATCH)
+                            $display("Debug output: %s = 0x%h", ex_ma_instr.rs1, dscratch);
+                        if (ex_ma_instr.funct12 == DOUTHEX)
+                            $write("0x%h", dscratch);
+                        if (ex_ma_instr.funct12 == DOUTCHAR)
+                            $write("%c", dscratch);
+                        if (ex_ma_instr.funct12 == DOUTINT)
+                            $write("%d", dscratch);
+                    end
                 end
             endcase
         end
@@ -57,7 +59,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 `ifdef TRACE
 
-    logic [63:0] db_rs1_value, db_rs2_value, db_result, db_mem_address, db_branch_target;
+    logic [63:0] db_mem_address, db_branch_target;
+    logic [31:0] db_rs1_value, db_rs2_value, db_result;
     logic db_invalid, db_branch_taken;
     instr_t db_instr;
 
