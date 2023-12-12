@@ -231,7 +231,7 @@ module clarvi #(
     instr_t      ex_ma_instr;
     logic [63:0] ex_mem_address;
     logic [32:0] ex_mem_addr_state;
-    logic [31:0] ex_result, ex_ma_result, ex_write_data_upper, ex_state, ex_next_state;
+    logic [31:0] ex_result, ex_ma_result, ex_write_data_lower, ex_state, ex_next_state;
     logic ex_ext_value, ex_access_part; 
     logic [1:0]  ex_word_offset, ex_ma_word_offset;
     logic [61 -DATA_ADDR_WIDTH:0] ex_address_high_bits;  // beyond our address width so should be 0
@@ -247,7 +247,7 @@ module clarvi #(
         // do address calculation, using bit 32 to propagate carry between
         // adds
         case (de_ex_instr.instr_part)
-            1'b0: ex_mem_address = de_ex_rs1_value + de_ex_instr.immediate;
+            1'b0: ex_mem_address = {32'b0, de_ex_rs1_value} + de_ex_instr.immediate;
             1'b1: ex_mem_address = {de_ex_rs1_value + de_ex_instr.immediate + ex_mem_addr_state[32],
                                     ex_mem_addr_state[31:0]}; 
         endcase
@@ -259,7 +259,7 @@ module clarvi #(
         main_byte_enable = compute_byte_enable(de_ex_instr.memory_width, ex_word_offset, ex_access_part);
 
         // shift the store value into the correct position in the 64-bit word
-        main_write_data = ({ex_write_data_upper, de_ex_rs2_value} << ex_word_offset*8) >> ex_access_part * 32;
+        main_write_data = ({de_ex_rs2_value, ex_write_data_lower} << ex_word_offset*8) >> ex_access_part * 32;
 
         // Stall earlier stages if not the last read
         stall_for_multiple_access = (main_read_enable || main_write_enable) && ex_access_part != 1;
@@ -274,8 +274,13 @@ module clarvi #(
                 ex_ma_result        <=  ex_result;
                 ex_ma_word_offset   <= ex_word_offset;
                 ex_state            <= ex_next_state;
-                ex_mem_addr_state   <= ex_mem_address;
-                ex_write_data_upper <= de_ex_rs2_value; 
+                //To prevent calculated address from changing after it is
+                //accumulated.
+                if (de_ex_instr.instr_part != 1) begin
+                    ex_mem_addr_state   <= ex_mem_address;
+                    ex_write_data_lower <= de_ex_rs2_value; 
+                end
+
                 main_read_pending   <= main_read_enable;
                 
                 /*
@@ -283,7 +288,7 @@ module clarvi #(
                     $display("%s, %s", de_ex_instr.memory_read ? "READ" : "WRITE", de_ex_invalid ? "INVALID" : "");
                     $display("Instr Part=%d, access_part=%d, stall_for_ma=%d", de_ex_instr.instr_part, ex_access_part, stall_for_multiple_access);
                     $display("ex_mem_addr=0x%h, main_addr=0x%h, word_offset=%d", ex_mem_address, main_address, ex_word_offset);
-                    $display("ex_write_data=0x%h, rs2_value=0x%h, main_write_data=0x%h", ex_write_data_upper, de_ex_rs2_value, main_write_data);
+                    $display("ex_write_data=0x%h, rs2_value=0x%h, main_write_data=0x%h", ex_write_data_lower, de_ex_rs2_value, main_write_data);
                     $display("ex_ma_invalid=%d", ex_ma_invalid);
                 end
                 */
@@ -675,8 +680,15 @@ module clarvi #(
         logic [31:0] sign_ext_32 = {32{instr[31]}};
         logic upper = instr_part == 1;
         unique case (instr`opcode)
-            OPC_JALR, OPC_LOAD, OPC_OP_IMM, OPC_OP_IMM_32: // i-type
+            OPC_JALR, OPC_LOAD:
                 return {1'b1, upper ? sign_ext_32 : {sign_ext_20, instr[31:20]}};
+            OPC_OP_IMM, OPC_OP_IMM_32: // i-type
+                unique case (instr`funct3)
+                    F3_SLL,F3_SR:
+                        return {1'b1,{sign_ext_20, instr[31:20]}};
+                    default:
+                        return {1'b1, upper ? sign_ext_32 : {sign_ext_20, instr[31:20]}};
+                endcase
             OPC_STORE: // s-type
                 return {1'b1, upper ? sign_ext_32 : {sign_ext_20, instr[31:25], instr[11:7]}};
             OPC_BRANCH: // sb-type
@@ -729,8 +741,16 @@ module clarvi #(
 
         if (instr.instr_part == 1 && instr.is32_bit_op) return {32{state[0]}};
         else unique case (instr.op)
-            ADD:   return rs1_value + rs2_value_or_imm + (instr.instr_part != 0 && state[0]);
-            SUB:   return rs1_value + ~rs2_value + (instr.instr_part == 0 || state[0]);
+            ADD: if (instr.is32_bit_op) begin //Use bit 32 to propagate sign ext.
+                    working_result = {32'b0, rs1_value} + {32'b0, rs2_value_or_imm};
+                    return { 31'b0, working_result[31], working_result[31:0] }; //sets sign ext. bit
+                end
+                else return {32'b0, rs1_value} + {32'b0, rs2_value_or_imm} + (instr.instr_part != 0 && state[0]);
+            SUB: if (instr.is32_bit_op) begin //Use bit 32 to propagate sign ext.
+                    working_result = {32'b0, rs1_value} + {32'b0, ~rs2_value_or_imm} + 1;
+                    return { 31'b0, working_result[31], working_result[31:0] }; //sets sign ext. bit
+                end
+                else return {32'b0, rs1_value} + {32'b0, ~rs2_value_or_imm} + (instr.instr_part == 0 || state[0]);
             // SLT is a reverse instruction, result of comparison on the lower
             // bits is dependant on the result of a comparison on the upper bits
             SLT:   case (instr.instr_part)
@@ -744,7 +764,7 @@ module clarvi #(
             XOR:   return rs1_value ^ rs2_value_or_imm;
             OR:    return rs1_value | rs2_value_or_imm;
             AND:   return rs1_value & rs2_value_or_imm;
-            SL:    return ({32'b0, rs1_value} << shift_amount) || (instr.instr_part != 0 ? state : 0);
+            SL:    return ({32'b0, rs1_value} << shift_amount) | {32'b0, (instr.instr_part != 0 ? state : 32'b0)};
             SRL:   case (instr.instr_part)
                     1'b1: begin
                         working_result = { rs1_value, 32'b0 } >> shift_amount;
@@ -755,7 +775,7 @@ module clarvi #(
                             working_result = { 32'b0, rs1_value >> shift_amount };
                             return { 31'b0, working_result[31], working_result[31:0] }; //sets sign ext. bit
                         end
-                        else return {32'b0, state || (rs1_value >> shift_amount) }; //combine with underflow from upper bits
+                        else return {32'b0, state | (rs1_value >> shift_amount) }; //combine with underflow from upper bits
                     end
                 endcase
             SRA:   case (instr.instr_part)
@@ -768,7 +788,7 @@ module clarvi #(
                             working_result = { 32'b0, $signed(rs1_value) >>> shift_amount };
                             return { 31'b0, working_result[31], working_result[31:0] }; //sets sign ext. bit
                         end
-                        else return {32'b0, state || (rs1_value >> shift_amount) }; //combine with underflow from upper bits
+                        else return {32'b0, state | (rs1_value >> shift_amount) }; //combine with underflow from upper bits
                     end
                 endcase
             LUI:   return instr.immediate;
