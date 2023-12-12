@@ -346,7 +346,7 @@
  <module name="SevenSeg24to8_0" kind="SevenSeg24to8" version="1.0" enabled="1" />
  <module name="clarvi_0" kind="clarvi" version="1.0" enabled="1">
   <parameter name="AUTO_INTERRUPT_RECEIVER_0_INTERRUPTS_USED" value="0" />
-  <parameter name="DATA_ADDR_WIDTH" value="29" />
+  <parameter name="DATA_ADDR_WIDTH" value="60" />
   <parameter name="DEFAULT_TRAP_VECTOR" value="0" />
   <parameter name="INITIAL_PC" value="0" />
   <parameter name="INSTR_ADDR_WIDTH" value="14" />
