@@ -318,7 +318,7 @@ typedef enum logic [31:0] {
 
 // machine interrupts pending register
 typedef struct packed {
-    logic [19:0] unused;
+    logic [51:0] unused;
     logic meip;
     logic heip;
     logic seip;
@@ -335,7 +335,7 @@ typedef struct packed {
 
 // machine interrupts enabled register
 typedef struct packed {
-    logic [19:0] unused;
+    logic [51:0] unused;
     logic meie;
     logic heie;
     logic seie;
