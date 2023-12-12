@@ -44,11 +44,10 @@ int test_load(){
     long *x2_ptr = &x2;
 
     //MSB of D,W,H,B = 0
-    *x1_ptr = 0x08192a4b4c5d6e7f;
+    *x1_ptr = 0x08192a3b4c5d6e7f;
     *x2_ptr = 0x8091a2b3c4d5e6f7; //Should force SD
 
     return helper_loadTest(x1_ptr, x2_ptr, x1, x2);
-    
 }
 
 int test_store(){
@@ -75,13 +74,14 @@ void test(char *name, int test(void)){
         dprint_str("FAIL: ret = ");
         dprint_int(result);
         dprint_char('\n');
+        asm("ECALL");
     }
 }
 
 void test_all(){
     test("lui tests:\n", test_lui);
     test("auipc tests:\n", test_auipc);
+    test("ADD/SUB tests:\n", test_addSub);
     test("load tests:\n", test_load);
     test("store tests:\n", test_store);
-    test("ADD/SUB tests:\n", test_addSub);
 }
