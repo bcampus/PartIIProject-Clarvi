@@ -262,6 +262,7 @@ typedef enum logic [11:0] {
 
 // mstatus register
 typedef struct packed {
+    logic [31:0]unused0;
     logic       sd;
     logic [1:0] unused1;
     logic [4:0] vm;
