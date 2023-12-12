@@ -791,8 +791,7 @@ module clarvi #(
             MEPC:      `write_csr(instr.op, value, mepc)
             MCAUSE:    `write_csr(instr.op, value, mcause)
             MBADADDR:  `write_csr(instr.op, value, mbadaddr)
-            MTIMECMP:  `write_csr(instr.op, value, timecmp[31:0])
-            MTIMECMPH: `write_csr(instr.op, value, timecmp[63:32])
+            MTIMECMP:  `write_csr(instr.op, value, timecmp)
             DSCRATCH,DOUTHEX,DOUTCHAR,DOUTINT:  `write_csr(instr.op, value, dscratch)
         endcase
     endtask
