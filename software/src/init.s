@@ -15,6 +15,9 @@ entry:
 
 
 end:
+    li t0, 0x04000080
+    li t1, 0xf0f0f0
+    sw t1, 0(t0)
     j end               # loop when finished if there is no environment to return to.
 
 

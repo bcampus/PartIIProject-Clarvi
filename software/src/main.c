@@ -65,20 +65,22 @@ int mult(int a, int b){
 }
 
 int main(void) {
-    //test(test_shifts);
+    hex_output(0);
+    //test("load test", test_load);
     test_all();
     //dprint_str("Mult tst:\n");
     //dprint_intvar("x", x);
     //x = mult(x, x);
     //dprint_intvar("x^2", x);
-    dprint_str("Hello world");
 
     bubbleSortBenchMark();
-    unsigned long counter = 0x0;
+    
+    hex_output(1);
     char r = 255;
-    char g = 0;
+    char g = 255;
     char b = 0;
-    char phase = 0;
+    char phase = 1;
+    hex_output(2);
     while (1){
         if (phase == 0){
             if (++g == 255) phase = 1;
@@ -93,11 +95,15 @@ int main(void) {
         } else if (phase == 5) {
             if (--b == 0) phase = 0;
         }
+        dprint(phase);
+        hex_output(((int) r << 16) | ((int) g << 8) | ((int) b));
+        
         
         vid_set_bg(PIXEL24(r,g,b));
-        for (int i = 0; i < 50000; i++){
-            hex_output(i);
+        for (int i = 0; i < 1000; i++){
             x=mult(i,i);
         }
+        
     }
+    
 }
