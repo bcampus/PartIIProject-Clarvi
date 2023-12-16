@@ -204,7 +204,8 @@ module clarvi #(
         // stall for one cycle since the result won't be ready yet - unless the load raises an exception.
         stall_for_load_dep = !if_de_invalid && !de_ex_invalid && de_ex_instr.memory_read && !ex_mem_address_error 
                           && (de_instr.rs1 == de_ex_instr.rd && de_instr.rs1_used
-                           || de_instr.rs2 == de_ex_instr.rd && de_instr.rs2_used);
+                           || de_instr.rs2 == de_ex_instr.rd && de_instr.rs2_used)
+                          && de_instr.instr_part == 0;
 
         // ignore waitrequest unless we are actually reading/writing memory,
         // because the bus is allowed to hold waitrequest high while idle.
@@ -470,7 +471,7 @@ module clarvi #(
         // instruction fetch fault or misaligned exception
         if_exception = pc[63:INSTR_ADDR_WIDTH+2] != '0 || !is_aligned(pc[1:0], W);
         // load/store fault or misaligned exception
-        ex_mem_address_error = ex_address_high_bits != '0 || !is_aligned(ex_word_offset, de_ex_instr.memory_width);
+        ex_mem_address_error = ex_address_high_bits != '0 || !is_aligned(ex_word_offset, de_ex_instr.memory_width); 
         // any exception or trap raised by the currently executing instruction
         ex_exception = !de_ex_invalid && (ex_mem_address_error && (de_ex_instr.memory_read || de_ex_instr.memory_write)
                     || de_ex_instr.op == INVALID || de_ex_instr.op == ECALL || de_ex_instr.op == EBREAK);
@@ -755,11 +756,11 @@ module clarvi #(
                 // SLT is a reverse instruction, result of comparison on the lower
                 // bits is dependant on the result of a comparison on the upper bits
                 SLT:   case (instr.instr_part)
-                        1'b0: return state[0] || (!state[1] && ($signed(rs1_value) < $signed(rs2_value_or_imm))); 
+                        1'b0: return state[0] || (state[1] && ($signed(rs1_value) < $signed(rs2_value_or_imm))); 
                         1'b1: return {rs1_value == rs2_value, $signed(rs1_value) < $signed(rs2_value_or_imm), 32'b0};
                     endcase
                 SLTU:  case (instr.instr_part)
-                        1'b0: return state[0] || (!state[1] && (rs1_value < rs2_value_or_imm));
+                        1'b0: return state[0] || (state[1] && (rs1_value < rs2_value_or_imm));
                         1'b1: return {rs1_value == rs2_value, rs1_value < rs2_value_or_imm, 32'b0};
                     endcase
                 XOR:   return rs1_value ^ rs2_value_or_imm;
