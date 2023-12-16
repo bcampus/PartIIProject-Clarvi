@@ -375,7 +375,7 @@
   <parameter name="enPRInitMode" value="false" />
   <parameter name="enableDiffWidth" value="false" />
   <parameter name="initMemContent" value="true" />
-  <parameter name="initializationFileName">/home/ben/Project/PartIIProject-Clarvi/software/build/mem64.hex</parameter>
+  <parameter name="initializationFileName">/home/ben/Project/PartIIProject-Clarvi/software/build/mem.hex</parameter>
   <parameter name="instanceID" value="NONE" />
   <parameter name="memorySize" value="65536" />
   <parameter name="readDuringWriteMode" value="DONT_CARE" />

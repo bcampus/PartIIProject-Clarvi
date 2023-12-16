@@ -139,12 +139,12 @@ set_interface_property main PORT_NAME_MAP ""
 set_interface_property main CMSIS_SVD_VARIABLES ""
 set_interface_property main SVD_ADDRESS_GROUP ""
 
-add_interface_port main avm_main_address address Output "((DATA_ADDR_WIDTH-1)) - (0) + 1"
-add_interface_port main avm_main_byteenable byteenable Output 8
+add_interface_port main avm_main_address address Output DATA_ADDR_WIDTH
+add_interface_port main avm_main_byteenable byteenable Output 4
 add_interface_port main avm_main_read read Output 1
-add_interface_port main avm_main_readdata readdata Input 64
+add_interface_port main avm_main_readdata readdata Input 32
 add_interface_port main avm_main_write write Output 1
-add_interface_port main avm_main_writedata writedata Output 64
+add_interface_port main avm_main_writedata writedata Output 32
 add_interface_port main avm_main_waitrequest waitrequest Input 1
 add_interface_port main avm_main_readdatavalid readdatavalid Input 1
 
@@ -176,9 +176,9 @@ set_interface_property instr PORT_NAME_MAP ""
 set_interface_property instr CMSIS_SVD_VARIABLES ""
 set_interface_property instr SVD_ADDRESS_GROUP ""
 
-add_interface_port instr avm_instr_address address Output "((INSTR_ADDR_WIDTH-1)) - (0) + 1"
+add_interface_port instr avm_instr_address address Output INSTR_ADDR_WIDTH
 add_interface_port instr avm_instr_read read Output 1
-add_interface_port instr avm_instr_readdata readdata Input 64
+add_interface_port instr avm_instr_readdata readdata Input 32
 add_interface_port instr avm_instr_waitrequest waitrequest Input 1
 add_interface_port instr avm_instr_readdatavalid readdatavalid Input 1
 
