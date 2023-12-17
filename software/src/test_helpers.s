@@ -24,6 +24,20 @@
     bne    \r1, \r2, \jmp
 .endm
 
+.macro  ASSERT_TRUE       r1, err_val, jmp
+    li      a0, \err_val # return value if test fails
+
+    DEBUG_PRINT \r1 
+    beqz    \r1, \jmp
+.endm
+
+.macro  ASSERT_FALSE       r1, err_val, jmp
+    li      a0, \err_val # return value if test fails
+
+    DEBUG_PRINT \r1 
+    bgtz    \r1, \jmp
+.endm
+
 .global test_lui
 test_lui:
 
@@ -76,6 +90,51 @@ test_auipc:
 auipc_ret:
     ret
 
+.global test_slt
+test_slt:
+    #unsigned t0 > t1 > t2 > t3 > t4 > zero
+    #  signed t2 > t3 > t4 > zero > t0 > t1  
+    li t0, 0xffffffffffffffff
+    li t1, 0xfffffffffffffffe
+    li t2, 0x7fffffffffffffff
+    li t3, 0x0000000100000000
+    li t4, 0x0000000080000000
+
+    slt t5, t0, t1
+    ASSERT_FALSE t5, 1, slt_ret
+    slt t5, t1, t0
+    ASSERT_TRUE  t5, 2, slt_ret
+    slt t5, t2, t1
+    ASSERT_FALSE t5, 3, slt_ret
+    slt t5, t3, t2
+    ASSERT_TRUE  t5, 4, slt_ret
+    slt t5, t4, t3
+    ASSERT_TRUE  t5, 5, slt_ret
+    slt t5, t4, zero
+    ASSERT_FALSE t5, 6, slt_ret
+    slt t5, t0, zero
+    ASSERT_TRUE  t5, 7, slt_ret
+
+    sltu t5, t0, t1
+    ASSERT_FALSE t5, 8, slt_ret
+    sltu t5, t1, t0
+    ASSERT_TRUE  t5, 9, slt_ret
+    sltu t5, t2, t1
+    ASSERT_TRUE t5, 10, slt_ret
+    sltu t5, t3, t2
+    ASSERT_TRUE  t5, 11, slt_ret
+    sltu t5, t4, t3
+    ASSERT_TRUE  t5, 12, slt_ret
+    sltu t5, t4, zero
+    ASSERT_FALSE t5, 13, slt_ret
+    sltu t5, t0, zero
+    ASSERT_FALSE  t5, 14, slt_ret
+
+    # Pass
+    addi    a0, zero, 0x0
+slt_ret:
+    ret
+    
 
 .global helper_loadTest
 helper_loadTest:
