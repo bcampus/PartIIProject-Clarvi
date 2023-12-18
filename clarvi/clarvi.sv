@@ -59,7 +59,9 @@ The core only supports single cycle latency instruction memory.
 Main memory can have arbitrary (>= 1 cycle) latency.
 
 *******************************************************************************/
+`ifndef RISCV_SVH
 `include "riscv.svh"
+`endif
 
 `define MACHINE_MODE    // enable support for machine mode instructions, interrupts and exceptions
 `define DEBUG           // enable debug outputs
@@ -714,7 +716,7 @@ module clarvi #(
 
 
     // === CSR functions =======================================================
-
+    
     function automatic logic [63:0] read_csr(csr_t csr_addr);
         case (csr_addr)
 `ifdef MACHINE_MODE
