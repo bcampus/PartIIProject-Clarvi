@@ -24,6 +24,8 @@
 
 vlib work
 
+vlog clarvi/clarvi_ALU.sv
+
 # used to enable trace by passing TRACE as an argument
 if {$argc == 2} {
     vlog clarvi/clarvi.sv +define+$2
