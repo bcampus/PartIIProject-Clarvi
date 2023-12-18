@@ -59,7 +59,9 @@ The core only supports single cycle latency instruction memory.
 Main memory can have arbitrary (>= 1 cycle) latency.
 
 *******************************************************************************/
+`ifndef RISCV_SVH
 `include "riscv.svh"
+`endif
 
 `define MACHINE_MODE    // enable support for machine mode instructions, interrupts and exceptions
 `define DEBUG           // enable debug outputs
@@ -248,10 +250,7 @@ module clarvi #(
 
     always_comb begin
         // CSR Read results
-        case (de_ex_instr.instr_part)
-            1'b0 : ex_csr_read = read_csr(csr_t'(de_ex_instr.funct12))[31:0]; 
-            1'b1 : ex_csr_read = read_csr(csr_t'(de_ex_instr.funct12))[63:32]; 
-        endcase
+        ex_csr_read = read_csr_part(csr_t'(de_ex_instr.funct12), de_ex_instr.instr_part);
 
         // --- Memory Access ---------------------------------------------------
 
@@ -486,7 +485,7 @@ module clarvi #(
         // instruction fetch fault or misaligned exception
         if_exception = pc[63:INSTR_ADDR_WIDTH+2] != '0 || !is_aligned(pc[1:0], W);
         // load/store fault or misaligned exception
-        ex_mem_address_error = ex_address_high_bits != '0 || !is_aligned(ex_word_offset, de_ex_instr.memory_width); 
+        ex_mem_address_error = 0 && (ex_address_high_bits != '0 || !is_aligned(ex_word_offset, de_ex_instr.memory_width)); 
         // any exception or trap raised by the currently executing instruction
         ex_exception = !de_ex_invalid && (ex_mem_address_error && (de_ex_instr.memory_read || de_ex_instr.memory_write)
                     || de_ex_instr.op == INVALID || de_ex_instr.op == ECALL || de_ex_instr.op == EBREAK);
@@ -831,6 +830,15 @@ module clarvi #(
 
 
     // === CSR functions =======================================================
+    
+    function automatic logic [31:0] read_csr_part(csr_t csr_addr, logic part);
+        logic [63:0] workingResult = read_csr(csr_addr);
+
+        case (part)
+            1'b0 : return workingResult[31:0]; 
+            1'b1 : return workingResult[63:32]; 
+        endcase
+    endfunction
 
     function automatic logic [63:0] read_csr(csr_t csr_addr);
         case (csr_addr)

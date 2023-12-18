@@ -1,4 +1,6 @@
+`ifndef RISCV_SVH
 `include "riscv.svh"
+`endif
 
 module clarvi_ALU (
     input logic clock,
