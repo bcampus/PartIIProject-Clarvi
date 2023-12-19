@@ -65,7 +65,6 @@ int mult(int a, int b){
 }
 
 int main(void) {
-    hex_output(0);
     //test("load test", test_load);
     test_all();
     //dprint_str("Mult tst:\n");
@@ -75,12 +74,11 @@ int main(void) {
 
     bubbleSortBenchMark();
     
-    hex_output(1);
+    /*
     char r = 255;
     char g = 255;
     char b = 0;
     char phase = 1;
-    hex_output(2);
     while (1){
         if (phase == 0){
             if (++g == 255) phase = 1;
@@ -105,5 +103,6 @@ int main(void) {
         }
         
     }
+    */
     
 }
