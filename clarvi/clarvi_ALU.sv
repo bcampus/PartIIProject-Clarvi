@@ -43,7 +43,6 @@ module clarvi_ALU (
             AUIPC: return instr.immediate + instr.pc;
             // JAL(R) stores the address of the instruction that followed the jump
             JAL, JALR: return instr.pc + 4;
-            CSRRW, CSRRS, CSRRC: return read_csr(csr_t'(instr.funct12));
             default: return 'x;
         endcase
     endfunction
