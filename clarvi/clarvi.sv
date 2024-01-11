@@ -123,8 +123,8 @@ module clarvi #(
 
     // traps caused by the instruction being fetched or executed
     logic interrupt, if_exception, ex_exception, ex_mem_address_error;
-    
-    logic main_read_pending = 0; //whether we have sent a memory read which has not yet been replied to
+
+    logic main_read_pending; //whether we have sent a memory read which has not yet been replied to
     
     // buffer to hold the last valid main memory read response: valid is set iff this data has not yet been used by MA
     logic[63:0] main_read_data_buffer;
@@ -228,7 +228,7 @@ module clarvi #(
     // === Execute =============================================================
 
     instr_t      ex_ma_instr;
-    logic [63:0] ex_mem_address, ex_alu_result, ex_ma_result, ex_csr_read;
+    logic [63:0] ex_alu_result, ex_ma_result, ex_csr_read;
     logic [2:0]  ex_word_offset, ex_ma_word_offset;
     logic [60 -DATA_ADDR_WIDTH:0] ex_address_high_bits;  // beyond our address width so should be 0
 
@@ -238,32 +238,36 @@ module clarvi #(
         .rs2_value (de_ex_rs2_value),
         .result (ex_alu_result) );
 
+    clarvi_MMU #(.DATA_ADDR_WIDTH(DATA_ADDR_WIDTH), .INSTR_ADDR_WIDTH(INSTR_ADDR_WIDTH)) MMU (
+        .clock                      (clock),
+        .reset                      (reset),
+        .stall                      (stall_ex),
+        .interrupt                  (interrupt),
+        .stall_for_memory_pending   (stall_for_memory_pending),
+        .instr                      (de_ex_instr),
+        .stage_invalid              (de_ex_invalid),
+        .rs1_value                  (de_ex_rs1_value),
+        .rs2_value                  (de_ex_rs2_value),
+
+        .address_high_bits          (ex_address_high_bits),
+        .main_address               (main_address),
+        .word_offset                (ex_word_offset),
+        .main_byte_enable           (main_byte_enable),
+        .main_read_enable           (main_read_enable),
+        .main_write_enable          (main_write_enable),
+        .main_write_data            (main_write_data),
+
+        .mem_address_error          (ex_mem_address_error),
+        .main_read_pending          (main_read_pending) //whether we have sent a memory read which has not yet been replied to
+    );
+
     always_comb begin
         // CSR Read results
         ex_csr_read = read_csr(csr_t'(de_ex_instr.funct12)); 
-
-        // --- Memory Access ---------------------------------------------------
-
-        main_read_enable  = !de_ex_invalid && !interrupt && !ex_mem_address_error && de_ex_instr.memory_read && !stall_for_memory_pending;
-        main_write_enable = !de_ex_invalid && !interrupt && !ex_mem_address_error && de_ex_instr.memory_write && !stall_for_memory_pending;
-
-        // do address calculation
-        ex_mem_address = de_ex_rs1_value + de_ex_instr.immediate;
-        // our memory is word addressed, so cut off the bottom two bits (this becomes the word offset),
-        // and the higher bits beyond our address range which should be 0.
-        {ex_address_high_bits, main_address, ex_word_offset} = ex_mem_address;
-
-        // set byte_enable mask according to whether we are loading/storing a word, half word or byte.
-        main_byte_enable = compute_byte_enable(de_ex_instr.memory_width, ex_word_offset);
-
-        // shift the store value into the correct position in the 64-bit word
-        main_write_data = de_ex_rs2_value << ex_word_offset*8;
     end
 
     always_ff @(posedge clock)
-        if (reset) begin
-            main_read_pending <= 0;
-        end else begin
+        if (!reset) begin
             if (!stall_ex) begin
                 ex_ma_instr       <= de_ex_instr;
                 ex_ma_result        <= (de_ex_instr.op == CSRRW || 
@@ -271,7 +275,6 @@ module clarvi #(
                                         de_ex_instr.op == CSRRC) ? 
                                        ex_csr_read : ex_alu_result;
                 ex_ma_word_offset <= ex_word_offset;
-                main_read_pending <= main_read_enable;
             end
         end
 
@@ -416,8 +419,6 @@ module clarvi #(
         interrupt = mstatus.mie && (mip.meip && mie.meie || mip.msip && mie.msie || mip.mtip && mie.mtie);
         // instruction fetch fault or misaligned exception
         if_exception = pc[63:INSTR_ADDR_WIDTH+2] != '0 || !is_aligned(pc[1:0], W);
-        // load/store fault or misaligned exception
-        ex_mem_address_error = ex_address_high_bits != '0 || !is_aligned(ex_word_offset, de_ex_instr.memory_width);
         // any exception or trap raised by the currently executing instruction
         ex_exception = !de_ex_invalid && (ex_mem_address_error && (de_ex_instr.memory_read || de_ex_instr.memory_write)
                     || de_ex_instr.op == INVALID || de_ex_instr.op == ECALL || de_ex_instr.op == EBREAK);
@@ -476,7 +477,6 @@ module clarvi #(
     always_comb begin
         interrupt = '0;
         if_exception = '0;
-        ex_mem_address_error = '0;
         ex_exception = '0;
     end
 `endif
@@ -676,16 +676,6 @@ module clarvi #(
 
 
     // === Memory Access functions =============================================
-
-    function automatic logic [7:0] compute_byte_enable(mem_width_t width, logic [2:0] word_offset);
-        unique case (width)
-            B: return 8'b00000001 << word_offset;
-            H: return 8'b00000011 << word_offset;
-            W: return 8'b00001111 << word_offset;
-            D: return 8'b11111111 << word_offset;
-            default: return 'x;
-        endcase
-    endfunction
 
     function automatic logic [63:0] load_shift_mask_extend(mem_width_t width, logic is_unsigned, logic [63:0] value, logic [2:0] word_offset);
         logic [63:0] masked_value = load_mask(width, value, word_offset);
