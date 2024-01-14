@@ -108,7 +108,23 @@ module clarvi #(
 
     localparam TRACE = 1;
 
-    logic [63:0] registers [1:31]; // register file - register zero is hardcoded to 0 when fetching
+    logic register_write_enable;
+
+    logic [31:0] ma_wb_value, de_rs1_fetched, de_rs2_fetched;
+
+    clarvi_RegFile RegisterFile (
+        .clock              (clock),
+        .fetch_part         (de_instr.instr_part),
+        .fetch_register_1   (de_instr.rs1),
+        .fetch_register_2   (de_instr.rs2),
+        .write_part         (ma_wb_instr.instr_part),
+        .write_register     (ma_wb_instr.rd),
+        .data_in            (ma_wb_value),
+        .write_enable       (register_write_enable),
+        .data_out_1         (de_rs1_fetched),
+        .data_out_2         (de_rs2_fetched),
+        .debug_register28   (debug_register28));
+
 
     logic [63:0] instret = '0;  // number of instructions retired (completed)
     logic [63:0] cycles  = '0;  // cycle counter
@@ -189,7 +205,6 @@ module clarvi #(
 
     // === Decode ==============================================================
 
-    logic [31:0] de_rs1_fetched, de_rs2_fetched;
     logic [31:0] de_rs1_forward, de_rs2_forward; // forwarding logic appears later
     instr_t      de_instr, de_ex_instr;
     logic [31:0] de_ex_rs1_value, de_ex_rs2_value;
@@ -197,10 +212,6 @@ module clarvi #(
 
     always_comb begin
         de_instr = decode_instr(if_de_instr, if_de_pc, de_instr_part);
-
-        // register fetch
-        de_rs1_fetched = fetch(de_instr.rs1, de_instr.instr_part);
-        de_rs2_fetched = fetch(de_instr.rs2, de_instr.instr_part);
 
         // if the next instruction is a load and this instruction is dependent on its result,
         // stall for one cycle since the result won't be ready yet - unless the load raises an exception.
@@ -362,7 +373,7 @@ module clarvi #(
     // === Memory Align ========================================================
 
     instr_t ma_wb_instr;
-    logic[31:0] ma_result, ma_load_value, ma_wb_value;
+    logic[31:0] ma_result, ma_load_value;
     logic ma_carry;
 
     always_comb begin
@@ -397,14 +408,11 @@ module clarvi #(
 
     // === Write Back ==========================================================
 
+    always_comb register_write_enable = !(stall_wb || ma_wb_invalid)
+                               && ma_wb_instr.enable_wb;
+
     always_ff @(posedge clock) begin
         if (!stall_wb && !ma_wb_invalid) begin
-            if (ma_wb_instr.enable_wb) begin
-                case (ma_wb_instr.instr_part)
-                    1'b0: registers[ma_wb_instr.rd][31:0] <= ma_wb_value;
-                    1'b1: registers[ma_wb_instr.rd][63:32] <= ma_wb_value;
-                endcase
-            end
             instret <= instret + 1;
         end
     end
@@ -524,19 +532,6 @@ module clarvi #(
 
 
     // === Decode functions ====================================================
-
-    function automatic logic [31:0] fetch(register_t register, logic instr_part);
-        // register zero is wired to constant 0.
-        if (register == zero) return '0;
-        else begin
-            logic [63:0] value = registers[register];
-            case (instr_part)
-                1'b0: return value[31:0];
-                1'b1: return value[63:32];
-            endcase
-        end
-    endfunction
-
 
     function automatic instr_t decode_instr(logic [31:0] instr, logic [63:0] pc, logic instr_part);
         // registers, funct7 and funct3 are in the same place in every instruction type
@@ -906,7 +901,6 @@ module clarvi #(
 
     // debug output from the MA stage
     always_comb begin
-        debug_register28 = registers[28];
         debug_scratch = dscratch;
         debug_pc = ex_ma_instr.pc;
     end
