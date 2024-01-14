@@ -108,24 +108,6 @@ module clarvi #(
 
     localparam TRACE = 1;
 
-    logic register_write_enable;
-
-    logic [31:0] ma_wb_value, de_rs1_fetched, de_rs2_fetched;
-
-    clarvi_RegFile RegisterFile (
-        .clock              (clock),
-        .fetch_part         (de_instr.instr_part),
-        .fetch_register_1   (de_instr.rs1),
-        .fetch_register_2   (de_instr.rs2),
-        .write_part         (ma_wb_instr.instr_part),
-        .write_register     (ma_wb_instr.rd),
-        .data_in            (ma_wb_value),
-        .write_enable       (register_write_enable),
-        .data_out_1         (de_rs1_fetched),
-        .data_out_2         (de_rs2_fetched),
-        .debug_register28   (debug_register28));
-
-
     logic [63:0] instret = '0;  // number of instructions retired (completed)
     logic [63:0] cycles  = '0;  // cycle counter
     always_ff @(posedge clock) cycles <= reset ? 0 : cycles + 1;
@@ -205,6 +187,7 @@ module clarvi #(
 
     // === Decode ==============================================================
 
+    logic [31:0] de_rs1_fetched, de_rs2_fetched;
     logic [31:0] de_rs1_forward, de_rs2_forward; // forwarding logic appears later
     instr_t      de_instr, de_ex_instr;
     logic [31:0] de_ex_rs1_value, de_ex_rs2_value;
@@ -373,7 +356,7 @@ module clarvi #(
     // === Memory Align ========================================================
 
     instr_t ma_wb_instr;
-    logic[31:0] ma_result, ma_load_value;
+    logic[31:0] ma_result, ma_load_value, ma_wb_value;
     logic ma_carry;
 
     always_comb begin
@@ -407,6 +390,22 @@ module clarvi #(
         end
 
     // === Write Back ==========================================================
+
+    logic register_write_enable;
+
+    clarvi_RegFile RegisterFile (
+        .clock              (clock),
+        .fetch_part         (de_instr.instr_part),
+        .fetch_register_1   (de_instr.rs1),
+        .fetch_register_2   (de_instr.rs2),
+        .write_part         (ma_wb_instr.instr_part),
+        .write_register     (ma_wb_instr.rd),
+        .data_in            (ma_wb_value),
+        .write_enable       (register_write_enable),
+        .data_out_1         (de_rs1_fetched),
+        .data_out_2         (de_rs2_fetched),
+        .debug_register28   (debug_register28));
+
 
     always_comb register_write_enable = !(stall_wb || ma_wb_invalid)
                                && ma_wb_instr.enable_wb;
