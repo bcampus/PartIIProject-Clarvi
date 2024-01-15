@@ -35,6 +35,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 `define funct7 [31:25]
 `define funct12 [31:20]
 
+typedef enum logic [2:0] {
+    REGISTER_FILE,
+    WRITE_BACK,
+    MEMORY_ACCESS,
+    EXECUTE
+} value_source_t;
 
 // RISC-V opcodes
 typedef enum logic [4:0] {
