@@ -420,6 +420,7 @@ module clarvi #(
 
     logic could_forward_from_ex, could_forward_from_ma, could_forward_from_wb;
     register_t de_rs1, de_rs2;
+    value_source_t rs1_source, rs2_source;
 
     always_comb begin
         // check if stages are eligible to have their values forwarded
@@ -433,16 +434,30 @@ module clarvi #(
         // since these may overwrite values written by later stages (less recent instructions).
         // Also check current part of the instruction in decode stage
         // corellates to the part we are forwarding from.
-        if      (could_forward_from_ex && de_ex_instr.rd == de_instr.rs1 && de_ex_instr.instr_part == de_instr.instr_part) de_rs1_forward = ex_alu_result;
-        else if (could_forward_from_ma && ex_ma_instr.rd == de_instr.rs1 && ex_ma_instr.instr_part == de_instr.instr_part) de_rs1_forward = ma_result;
-        else if (could_forward_from_wb && ma_wb_instr.rd == de_instr.rs1 && ma_wb_instr.instr_part == de_instr.instr_part) de_rs1_forward = ma_wb_value;
-        else                                                              de_rs1_forward = de_rs1_fetched;
+        rs1_source = get_value_source(de_instr.rs1, de_instr.instr_part);
+        rs2_source = get_value_source(de_instr.rs2, de_instr.instr_part);
 
-        if      (could_forward_from_ex && de_ex_instr.rd == de_instr.rs2 && de_ex_instr.instr_part == de_instr.instr_part) de_rs2_forward = ex_alu_result;
-        else if (could_forward_from_ma && ex_ma_instr.rd == de_instr.rs2 && ex_ma_instr.instr_part == de_instr.instr_part) de_rs2_forward = ma_result;
-        else if (could_forward_from_wb && ma_wb_instr.rd == de_instr.rs2 && ma_wb_instr.instr_part == de_instr.instr_part) de_rs2_forward = ma_wb_value;
-        else                                                              de_rs2_forward = de_rs2_fetched;
+        unique case (rs1_source)
+            REGISTER_FILE:  de_rs1_forward = de_rs1_fetched;
+            WRITE_BACK:     de_rs1_forward = ma_wb_value; 
+            MEMORY_ACCESS:  de_rs1_forward = ma_result;
+            EXECUTE:        de_rs1_forward = ex_alu_result;
+        endcase
+
+        unique case (rs2_source)
+            REGISTER_FILE:  de_rs2_forward = de_rs2_fetched;
+            WRITE_BACK:     de_rs2_forward = ma_wb_value; 
+            MEMORY_ACCESS:  de_rs2_forward = ma_result;
+            EXECUTE:        de_rs2_forward = ex_alu_result;
+        endcase
     end
+
+    function automatic value_source_t get_value_source(register_t reg_src, logic instr_part);
+        if      (could_forward_from_ex && de_ex_instr.rd == reg_src && de_ex_instr.instr_part == instr_part) return EXECUTE;
+        else if (could_forward_from_ma && ex_ma_instr.rd == reg_src && ex_ma_instr.instr_part == instr_part) return MEMORY_ACCESS;
+        else if (could_forward_from_wb && ma_wb_instr.rd == reg_src && ma_wb_instr.instr_part == instr_part) return WRITE_BACK;
+        else                                                              return REGISTER_FILE;
+    endfunction
 
 
 `ifdef MACHINE_MODE
