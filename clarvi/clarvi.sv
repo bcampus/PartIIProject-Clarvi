@@ -83,18 +83,18 @@ module clarvi #(
 
     // data memory port (read/write)
     output logic [DATA_ADDR_WIDTH-1:0] main_address,
-    output logic [3:0]  main_byte_enable,
+    output logic [1:0]  main_byte_enable,
     output logic        main_read_enable,
-    input  logic [31:0] main_read_data,
+    input  logic [15:0] main_read_data,
     input  logic        main_read_data_valid,
     output logic        main_write_enable,
-    output logic [31:0] main_write_data,
+    output logic [15:0] main_write_data,
     input  logic        main_wait,
 
     // instruction memory port (read-only)
     output logic [INSTR_ADDR_WIDTH-1:0] instr_address,
     output logic        instr_read_enable,
-    input  logic [31:0] instr_read_data,
+    input  logic [15:0] instr_read_data,
     input  logic        instr_wait,
 
     // external interrupt signal, active high
@@ -125,7 +125,7 @@ module clarvi #(
     logic main_read_pending; //whether we have sent a memory read which has not yet been replied to
     
     // buffer to hold the last valid main memory read response: valid is set iff this data has not yet been used by MA
-    logic[31:0] main_read_data_buffer;
+    logic[15:0] main_read_data_buffer;
     logic main_read_data_buffer_valid = 0;
 
     // Stage invalidation flags
@@ -160,12 +160,15 @@ module clarvi #(
 
     logic [63:0] pc = INITIAL_PC;
     logic [63:0] if_pc, if_de_pc;
-    logic [31:0] if_de_instr, instr_read_data_buffer; //memory word length is 64 bit but instructions are 32-bit
+    logic [31:0] if_de_instr;
+    logic [15:0] instr_read_data_buffer, if_instr_lower; 
     logic if_stall_on_prev;
+    logic if_fetch_part = '0;
+    logic if_prev_part;//records previous part issued for (and is currently on instr line)
 
     always_comb begin
         // PC is byte-addressed but our instruction memory is word-addressed
-        instr_address = pc[INSTR_ADDR_WIDTH+1:2];
+        instr_address = pc[INSTR_ADDR_WIDTH:1] + if_fetch_part;
         // read the next instruction on every cycle
         instr_read_enable = '1;
     end
@@ -173,27 +176,31 @@ module clarvi #(
     always_ff @(posedge clock) begin
         // buffer the last instruction read before a stall.
         if_stall_on_prev <= stall_if;
-        if (!if_stall_on_prev)
+        if_prev_part <= if_fetch_part;
+        if_fetch_part <= !if_fetch_part && !stall_if && !if_invalid;
+
+        if (if_prev_part == 0 && !if_stall_on_prev) 
+            if_instr_lower <= instr_read_data;
+        if (if_prev_part == 1 && stall_if)
             instr_read_data_buffer <= instr_read_data;
 
-        if (!stall_if) begin
+        if (!stall_if && (if_stall_on_prev || if_prev_part == 1)) begin
             // if there was a stall on the last cycle, we read from the instruction buffer not the bus.
             // this allows the PC to 'catch up' on the next cycle.
-            if_de_instr <= if_stall_on_prev ? instr_read_data_buffer : instr_read_data;
-            if_pc <= pc;
+            if_de_instr <= { if_prev_part == 1 ? instr_read_data : instr_read_data_buffer, if_instr_lower };
             if_de_pc <= if_pc;
         end
     end
 
     // === Decode ==============================================================
 
-    logic [31:0] de_rs1_fetched, de_rs2_fetched;
-    logic [31:0] de_rs1_value, de_rs2_value, de_ex_rs1_value, de_ex_rs2_value;
+    logic [15:0] de_rs1_fetched, de_rs2_fetched;
+    logic [15:0] de_rs1_value, de_rs2_value, de_ex_rs1_value, de_ex_rs2_value;
     instr_t      de_instr, de_ex_instr;
-    //
+
     //defined to allow referencing of later defined vars
     instr_t de_ex_ma_instr, de_ma_wb_instr;
-    logic [31:0] wb_forward_value, ma_forward_value, ex_forward_value;
+    logic [15:0] wb_forward_value, ma_forward_value, ex_forward_value;
     
 
     clarvi_Decode Decoder (
@@ -250,10 +257,10 @@ module clarvi #(
     // === Execute =============================================================
 
     instr_t      ex_ma_instr;
-    logic [31:0] ex_alu_result, ex_ma_result, ex_csr_read;
-    logic [1:0]  ex_word_offset, ex_ma_word_offset;
-    logic [61 -DATA_ADDR_WIDTH:0] ex_address_high_bits;  // beyond our address width so should be 0
-    logic ex_access_part;
+    logic [15:0] ex_alu_result, ex_ma_result, ex_csr_read;
+    logic ex_word_offset, ex_ma_word_offset;
+    logic [62 -DATA_ADDR_WIDTH:0] ex_address_high_bits;  // beyond our address width so should be 0
+    logic [1:0] ex_access_part;
 
     assign de_ex_ma_instr = ex_ma_instr;
     assign ex_forward_value = ex_alu_result;
@@ -295,7 +302,6 @@ module clarvi #(
     always_comb begin
         // CSR Read results
         ex_csr_read = read_csr_part(csr_t'(de_ex_instr.funct12), de_ex_instr.instr_part);
-
     end
 
     always_ff @(posedge clock)
@@ -308,7 +314,7 @@ module clarvi #(
                                        ex_csr_read : ex_alu_result;
                 ex_ma_word_offset   <= ex_word_offset;
 
-                if (!de_ex_invalid && (de_ex_instr.memory_read || de_ex_instr.memory_write) && de_ex_instr.instr_part == 1) begin
+                if (!de_ex_invalid && (de_ex_instr.memory_read || de_ex_instr.memory_write) && de_ex_instr.instr_part == 3) begin
                     ex_ma_instr.instr_part <= ex_access_part;
                 end
             end
@@ -321,9 +327,9 @@ module clarvi #(
 
     always_comb begin
         ex_branch_next_state = !de_ex_invalid && is_branch_taken(de_ex_instr, de_ex_rs1_value, de_ex_rs2_value, ex_branch_state);
-        ex_branch_taken = de_ex_instr.instr_part == 1 && ex_branch_next_state;
+        ex_branch_taken = de_ex_instr.instr_part == 3 && ex_branch_next_state;
         ex_branch_target = target_pc(de_ex_instr, de_ex_rs1_value, ex_branch_target_state);
-        ex_next_pc = (de_ex_instr.instr_part == 1 && ex_branch_taken) ? ex_branch_target : pc + 4; //note that pc + 4 is actually a prediction for 3 instructions' time
+        ex_next_pc = ex_branch_taken ? ex_branch_target : pc + 4; //note that pc + 4 is actually a prediction for 3 instructions' time
     end
 
     always_ff @(posedge clock)
@@ -342,29 +348,36 @@ module clarvi #(
             
             if (!stall_if) begin
                 // if a trap is taken, go to the handler instead
-                pc <= (if_exception || ex_exception) ? mtvec : ex_next_pc;
+                if (if_fetch_part == 1) begin
+                    pc <= (if_exception || ex_exception) ? mtvec : ex_next_pc;
+                    if_pc <= pc;
+                end
             
                 // invalidate on any exception, interrupt or branch.
                 if_invalid <= interrupt || ex_exception || if_exception || ex_branch_taken;
                     
                 // invalidate on an EX exception, interrupt or branch.
                 // an IF exception can only happen after a branch so this stage would already be invalid.
-                if_de_invalid <= if_invalid || interrupt || ex_exception || ex_branch_taken;
+                if_de_invalid <= if_invalid || interrupt || ex_exception || ex_branch_taken 
+                        || (!if_stall_on_prev && if_prev_part != 1);
             end
             else if (ex_branch_taken) begin
                 pc <= ex_next_pc;
 
                 if_invalid <= '1;
                 if_de_invalid <= '1;
+            end else if (if_fetch_part == 1) begin
+                pc <= ex_next_pc;
+                if_pc <= pc;
             end
          
             // invalidate in an EX exception, interrupt, branch or load dependency stall.
             // an IF exception can only happen after a branch so this stage would already be invalid.
-            if (!stall_de)  de_ex_invalid <= if_de_invalid || interrupt || ex_exception || (de_ex_instr.instr_part == 1 && ex_branch_taken);
+            if (!stall_de)  de_ex_invalid <= if_de_invalid || interrupt || ex_exception || (de_ex_instr.instr_part == 3 && ex_branch_taken);
             // we only stall de but not ex on load dep, so insert a bubble, 
             // ex_access_part distinguishes between load dep and multiple
             // access
-            else if (!stall_ex && ex_access_part==1) de_ex_invalid <= 1; 
+            else if (!stall_ex && ex_access_part==3) de_ex_invalid <= 1; 
             
             // invalidate on an interrupt or any EX exception that could be caused by an instruction that writes back.
             // i.e. an exception on a load or an invalid instruction.
@@ -373,7 +386,7 @@ module clarvi #(
                         || interrupt 
                         || ex_mem_address_error && de_ex_instr.memory_read 
                         || de_ex_instr.op == INVALID 
-                        || (de_ex_instr.memory_read || de_ex_instr.memory_write) && de_ex_instr.instr_part != 1;
+                        || (de_ex_instr.memory_read || de_ex_instr.memory_write) && de_ex_instr.instr_part != 3;
             // we only stall ex and not ma when memory pending, so replay (no bubble here)
             
             // if ma received invalid data, insert a bubble into wb
@@ -383,7 +396,7 @@ module clarvi #(
     // === Memory Align ========================================================
 
     instr_t ma_wb_instr;
-    logic[31:0] ma_result, ma_load_value, ma_wb_value;
+    logic[15:0] ma_result, ma_load_value, ma_wb_value;
     logic ma_carry;
 
     assign de_ma_wb_instr = ma_wb_instr;
@@ -406,7 +419,7 @@ module clarvi #(
             main_read_data_buffer_valid <= 0;
         end else begin
             if (!stall_ma) begin
-                  ma_carry    <= ma_load_value[31];
+                  ma_carry    <= ma_load_value[15];
                   ma_wb_instr <= ex_ma_instr;
                   ma_wb_value <= ma_result;
                   main_read_data_buffer_valid <= 0;
@@ -535,19 +548,19 @@ module clarvi #(
 
     // === Execute functions ===================================================
 
-    function automatic logic is_branch_taken(instr_t instr, logic [31:0] rs1_value, logic [31:0] rs2_value, logic state);
+    function automatic logic is_branch_taken(instr_t instr, logic [15:0] rs1_value, logic [15:0] rs2_value, logic state);
         unique case (instr.op)
             BEQ:  return rs1_value == rs2_value && (instr.instr_part == 0 || state);
             BNE:  return rs1_value != rs2_value || (instr.instr_part != 0 && state);
             BGEU: return rs1_value > rs2_value || (rs1_value == rs2_value && (instr.instr_part == 0 || state)); 
             BLTU: return rs1_value < rs2_value || (rs1_value == rs2_value && (instr.instr_part != 0 && state));
             BGE: case(instr.instr_part)
-                1'b0: return rs1_value >= rs2_value;
-                1'b1: return $signed(rs1_value) > $signed(rs2_value) || (rs1_value == rs2_value && state);
+                3: return $signed(rs1_value) > $signed(rs2_value) || (rs1_value == rs2_value && state);
+                default: return rs1_value > rs2_value || (rs1_value == rs2_value && (instr.instr_part == 0 || state));
             endcase
             BLT:  case(instr.instr_part)
-                1'b0: return rs1_value < rs2_value;
-                1'b1: return $signed(rs1_value) < $signed(rs2_value) || (rs1_value == rs2_value && state);
+                3: return $signed(rs1_value) < $signed(rs2_value) || (rs1_value == rs2_value && state);
+                default: return rs1_value < rs2_value || (rs1_value == rs2_value && (instr.instr_part != 0 && state));
             endcase
             // we implement fence.i (sync instruction and data memory) by doing a branch to reload the next instruction
             JAL, JALR, FENCE_I, MRET: return '1;
@@ -556,15 +569,19 @@ module clarvi #(
     endfunction
 
 
-    function automatic logic [63:0] target_pc(instr_t instr, logic [31:0] rs1_value, logic [63:0] state);
+    function automatic logic [63:0] target_pc(instr_t instr, logic [15:0] rs1_value, logic [63:0] state);
         unique case (instr.op)
             JAL, BEQ, BNE, BLT, BGE, BLTU, BGEU: case (instr.instr_part)
-                1'b0: return {32'b0, instr.pc[31:0]} + instr.immediate;
-                1'b1: return { instr.pc[63:32] + instr.immediate + state[32], state[31:0] };
+                0: return {48'b0, instr.pc[15:0]} + instr.immediate;
+                1: return {{32'b0, instr.pc[31:16]} + instr.immediate + state[16], state[15:0] };
+                2: return {{16'b0, instr.pc[47:32]} + instr.immediate + state[32], state[31:0] };
+                3: return {instr.pc[63:48] + instr.immediate + state[48], state[47:0] };
             endcase
             JALR: case (instr.instr_part)
-                1'b0: return  ({32'b0, rs1_value} + instr.immediate) & 64'h_00_00_00_01_ff_ff_ff_fe; // set LSB to 0
-                1'b1: return {rs1_value + instr.immediate + state[32], state[31:0]} ; // set LSB to 0
+                0: return ({48'b0, rs1_value} + instr.immediate) & 64'h_ff_ff_ff_ff_ff_ff_ff_fe; // set LSB to 0
+                1: return {{32'b0, rs1_value} + instr.immediate + state[16], state[15:0]} ; // set LSB to 0
+                2: return {{16'b0, rs1_value} + instr.immediate + state[32], state[31:0]} ; // set LSB to 0
+                3: return {rs1_value + instr.immediate + state[48], state[47:0]} ; // set LSB to 0
             endcase
             FENCE_I: return instr.pc + 4;
 `ifdef MACHINE_MODE
@@ -577,33 +594,28 @@ module clarvi #(
 
     // === Memory Access functions =============================================
 
-    function automatic logic [31:0] load_shift_mask_extend(logic part, 
+    function automatic logic [15:0] load_shift_mask_extend(logic [1:0] part, 
                                                     mem_width_t width, 
                                                     logic is_unsigned, 
-                                                    logic [31:0] value, 
-                                                    logic [1:0] word_offset, 
+                                                    logic [15:0] value, 
+                                                    logic word_offset, 
                                                     logic carry);
-        logic [31:0] masked_value = load_mask(width, value, word_offset);
-        if (width != D && part == 1) return {32{(~is_unsigned) && carry}};
-        else
+        logic [15:0] masked_value = load_mask(width, value, word_offset);
         unique case (width)
-            B: return is_unsigned
-                    ? {24'b0, masked_value[7:0]}
-                    : {{24{masked_value[7]}}, masked_value[7:0]};
-            H: return is_unsigned
-                    ? {16'b0, masked_value[15:0]}
-                    : {{16{masked_value[15]}}, masked_value[15:0]};
-            W: return masked_value;
+            B: return part != 0 ? {16{(~is_unsigned) && carry}} : 
+                    (is_unsigned
+                        ? {24'b0, masked_value[7:0]}
+                        : {{24{masked_value[7]}}, masked_value[7:0]});
+            H: return part != 0 ? {16{(~is_unsigned) && carry}} : value;
+            W: return part > 1 ? {16{(~is_unsigned) && carry}} : value;
             D: return value;
             default: return 'x;
         endcase
     endfunction
 
-    function automatic logic [31:0] load_mask(mem_width_t width, logic [31:0] value, logic [1:0] word_offset);
+    function automatic logic [15:0] load_mask(mem_width_t width, logic [15:0] value, logic word_offset);
         unique case (width)
-            B: return (value >> word_offset*8) & 32'h_00_00_00_ff;
-            H: return (value >> word_offset*8) & 32'h_00_00_ff_ff;
-            W: return (value >> word_offset*8) & 32'h_ff_ff_ff_ff;
+            B: return (value >> word_offset*8) & 16'h_00_ff;
             default: return 'x;
         endcase
     endfunction
@@ -612,12 +624,14 @@ module clarvi #(
 
     // === CSR functions =======================================================
     
-    function automatic logic [31:0] read_csr_part(csr_t csr_addr, logic part);
+    function automatic logic [15:0] read_csr_part(csr_t csr_addr, logic [1:0] part);
         logic [63:0] workingResult = read_csr(csr_addr);
 
         case (part)
-            1'b0 : return workingResult[31:0]; 
-            1'b1 : return workingResult[63:32]; 
+            0 : return workingResult[15:0]; 
+            1 : return workingResult[31:16]; 
+            2 : return workingResult[47:32]; 
+            3 : return workingResult[63:48]; 
         endcase
     endfunction
 
@@ -650,16 +664,32 @@ module clarvi #(
     endfunction
 
 `ifdef MACHINE_MODE
+        
     `define write_csr(operation, part, value, csr) \
         case (operation)                     \
-            CSRRW: case (part) 0: csr[31:0] <= value;              1: csr[63:32] <= value;               endcase \
-            CSRRS: case (part) 0: csr[31:0] <= csr[31:0] | value;  1: csr[63:32] <= csr[63:32] | value;  endcase \
-            CSRRC: case (part) 0: csr[31:0] <= csr[31:0] & ~value; 1: csr[63:32] <= csr[63:32] & ~value; endcase \
+            CSRRW: case (part) \
+                0: csr[15:0] <= value; \
+                1: csr[31:16] <= value; \
+                2: csr[47:32] <= value; \
+                3: csr[63:48] <= value; \
+            endcase\
+            CSRRS: case (part) \
+                0: csr[15:0] <= csr[15:0] | value; \
+                1: csr[31:16] <= csr[31:16] | value; \
+                2: csr[47:32] <= csr[47:32] | value; \
+                3: csr[63:48] <= csr[63:48] | value; \
+            endcase\
+            CSRRC: case (part) \
+                0: csr[15:0] <= csr[15:0] & ~value; \
+                1: csr[31:16] <= csr[31:16] & ~value; \
+                2: csr[47:32] <= csr[47:32] & ~value; \
+                3: csr[63:48] <= csr[63:48] & ~value; \
+            endcase\
         endcase
 
-    task automatic execute_csr(instr_t instr, logic [31:0] rs1_value);
+    task automatic execute_csr(instr_t instr, logic [15:0] rs1_value);
         // for immediate versions of the CSR instructions, the rs1 field contains a 5-bit immediate.
-        logic[31:0] value = instr.immediate_used ? instr.rs1 : rs1_value;
+        logic[15:0] value = instr.immediate_used ? instr.rs1 : rs1_value;
         logic[11:0] csr_addr = instr.funct12;
         case (csr_addr)
             MTVEC:     `write_csr(instr.op, instr.instr_part, value, mtvec)

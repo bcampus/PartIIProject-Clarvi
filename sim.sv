@@ -33,16 +33,16 @@ module clarvi_sim();
     localparam ADDR_WIDTH = 16;
 
     logic [ADDR_WIDTH-1:0] main_address;
-    logic [3:0]  main_byteenable;
+    logic [1:0]  main_byteenable;
     logic        main_read;
-    logic [31:0] main_readdata;
+    logic [15:0] main_readdata;
     logic        main_write;
-    logic [31:0] main_writedata;
+    logic [15:0] main_writedata;
     logic        main_waitrequest = 0;
     logic        main_readdatavalid = 1;
     logic [ADDR_WIDTH-1:0] instr_address;
     logic        instr_read;
-    logic [31:0] instr_readdata;
+    logic [15:0] instr_readdata;
     logic        instr_waitrequest = 0;
     logic        instr_readdatavalid = 1;
 
@@ -51,7 +51,7 @@ module clarvi_sim();
 
     dual_port_bram #(
         .ADDRESS_WIDTH(ADDR_WIDTH),
-        .BYTES_PER_WORD(4)
+        .BYTES_PER_WORD(2)
     ) mem (
         .clock,
         .reset,
@@ -62,11 +62,11 @@ module clarvi_sim();
         .avs_a_write        (main_write),
         .avs_a_writedata    (main_writedata),
         .avs_b_address      (instr_address),
-        .avs_b_byteenable   (4'b1111),
+        .avs_b_byteenable   (2'b11),
         .avs_b_read         (instr_read),
         .avs_b_readdata     (instr_readdata),
         .avs_b_write        (1'b0),
-        .avs_b_writedata    (32'dx)
+        .avs_b_writedata    (16'dx)
     );
 
     // components for mocking interrupt or waitrequest signals:
@@ -121,9 +121,9 @@ module memory_debug #(
     input logic clock,
     input logic [ADDR_WIDTH-1:0] address,
     input logic read_enable,
-    input logic [31:0] read_data,
+    input logic [15:0] read_data,
     input logic write_enable,
-    input logic [31:0] write_data
+    input logic [15:0] write_data
 );
 
     always_ff @(posedge clock) begin

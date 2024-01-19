@@ -39,18 +39,18 @@ module clarvi_avalon #(
 
     // data memory port (read/write)
     output logic [DATA_ADDR_WIDTH-1:0] avm_main_address,
-    output logic [3:0]  avm_main_byteenable,
+    output logic [1:0]  avm_main_byteenable,
     output logic        avm_main_read,
-    input  logic [31:0] avm_main_readdata,
+    input  logic [15:0] avm_main_readdata,
     output logic        avm_main_write,
-    output logic [31:0] avm_main_writedata,
+    output logic [15:0] avm_main_writedata,
     input  logic        avm_main_waitrequest,
     input  logic        avm_main_readdatavalid,
 
     // instruction memory port (read-only)
     output logic [INSTR_ADDR_WIDTH-1:0] avm_instr_address,
     output logic        avm_instr_read,
-    input  logic [31:0] avm_instr_readdata,
+    input  logic [15:0] avm_instr_readdata,
     input  logic        avm_instr_waitrequest,
     input  logic        avm_instr_readdatavalid,
 

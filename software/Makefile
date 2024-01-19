@@ -32,7 +32,7 @@ CCFLAGS = -O3 $(TARGET_ARCH)
 # When typing 'make' not followed by a rule name, the first rule is followed.  This rule depends on
 # everything, causing all the parts to be built
 
-all: dirs $(BUILD)/mem64.hex $(BUILD)/mem.hex $(BUILD)/$(PROJECT).dump
+all: dirs $(BUILD)/mem16.hex $(BUILD)/mem64.hex $(BUILD)/mem.hex $(BUILD)/$(PROJECT).dump
 
 # how to build a .o file from a .c file
 $(BUILD)/%.o: src/%.c
@@ -66,6 +66,10 @@ $(BUILD)/mem.txt: $(BUILD)/mem.bin
 $(BUILD)/mem64.txt: $(BUILD)/mem.txt
 	python txt32to64.py $< $@
 
+# create 64 bit version for rv64i
+$(BUILD)/mem16.txt: $(BUILD)/mem.txt
+	python txt32to16.py $< $@
+
 # convert to an Intel HEX file for downloading to the FPGA
 $(BUILD)/mem.hex: $(BUILD)/mem.txt
 	python txt2hex.py $< $@ 4
@@ -73,6 +77,9 @@ $(BUILD)/mem.hex: $(BUILD)/mem.txt
 # create 64 bit version for rv64i
 $(BUILD)/mem64.hex: $(BUILD)/mem64.txt
 	python txt2hex.py $< $@ 8
+
+$(BUILD)/mem16.hex: $(BUILD)/mem16.txt
+	python txt2hex.py $< $@ 2
 
 # make software project folder
 dirs:

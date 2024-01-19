@@ -48,3 +48,4 @@ if {$argc > 0} {
 
 add wave -position insertpoint \
 {/clarvi_sim/clock}
+add wave -position end sim:/clarvi_sim/clarvi/clarvi/*

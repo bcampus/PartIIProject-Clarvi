@@ -30,7 +30,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
             case (ex_ma_instr.op)
                 CSRRW, CSRRS, CSRRC:
                 begin
-                    if (ex_ma_instr.instr_part == 1) begin
+                    if (ex_ma_instr.instr_part == 3) begin
                         // catch writes to dscratch and output them
                         if (ex_ma_instr.funct12 == DSCRATCH)
                             $display("Debug output: %s = 0x%h", ex_ma_instr.rs1, dscratch);

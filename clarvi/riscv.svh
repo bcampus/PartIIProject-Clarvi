@@ -142,7 +142,7 @@ typedef struct packed {
     logic        rs2_used;
     logic        is32_bit_op;
     logic        immediate_used;
-    logic [31:0] immediate;
+    logic [15:0] immediate;
     funct12_t    funct12;
     logic        memory_write;
     logic        memory_read;
@@ -150,7 +150,7 @@ typedef struct packed {
     mem_width_t  memory_width;
     logic        enable_wb;
     logic [63:0] pc;
-    logic        instr_part;
+    logic [ 1:0] instr_part;
 } instr_t;
 
 
