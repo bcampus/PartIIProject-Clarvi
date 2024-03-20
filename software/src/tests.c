@@ -6,7 +6,8 @@ int y2=0x7aaaaaaa;
 unsigned int y3=0xaaaaaaaa;
 unsigned WORD y4 = -1;
 
-int test_shifts(){
+
+int test_shifts(int id){
     dprint_str("Shift tst:\n");
     dprint_hexvar("y1", y1);
     dprint_str("SLL\n");
@@ -36,7 +37,7 @@ int test_shifts(){
     return 0;
 }
 
-int test_load(){
+int test_load(int id){
     
     long x1 = 0x0; 
     long x2 = 0x0; 
@@ -47,27 +48,27 @@ int test_load(){
     *x1_ptr = 0x08192a3b4c5d6e7f;
     *x2_ptr = 0x8091a2b3c4d5e6f7; //Should force SD
 
-    return helper_loadTest(x1_ptr, x2_ptr, x1, x2);
+    return helper_loadTest(id, x1_ptr, x2_ptr, x1, x2);
 }
 
-int test_store(){
+int test_store(int id){
     
     long x = 0x0; 
     long *x_ptr = &x;
 
     *x_ptr = 0x08192a4b4c5d6e7f;
 
-    return helper_storeTest(x_ptr, x);
+    return helper_storeTest(id, x_ptr, x);
     
 }
 
-int test_addSub(){
-    return helper_addSubTest();
+int test_addSub(int id){
+    return helper_addSubTest(id);
 }
 
-void test(char *name, int test(void)){
+void test(int id, char *name, int test(int)){
     dprint_str(name);
-    int result = test();
+    int result = test(id << 16);
     if (result == 0){
         dprint_str("PASS\n");
     }else{
@@ -79,11 +80,11 @@ void test(char *name, int test(void)){
 }
 
 void test_all(){
-    test("lui tests:\n", test_lui);
-    test("auipc tests:\n", test_auipc);
-    test("ADD/SUB tests:\n", test_addSub);
-    test("load tests:\n", test_load);
-    test("store tests:\n", test_store);
-    test("ADD/SUB tests:\n", test_addSub);
-    test("SLT tests:\n", test_slt);
+    test(1, "lui tests:\n", test_lui);
+    test(2, "auipc tests:\n", test_auipc);
+    test(3, "ADD/SUB tests:\n", test_addSub);
+    test(4, "load tests:\n", test_load);
+    test(5, "store tests:\n", test_store);
+    test(6, "ADD/SUB tests:\n", test_addSub);
+    test(7, "SLT tests:\n", test_slt);
 }

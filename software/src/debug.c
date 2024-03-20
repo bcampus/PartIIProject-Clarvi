@@ -39,3 +39,9 @@ void dprint_hexvar(char *name, WORD value){
     dprint_hex(value);
     dprint_char('\n');
 }
+
+void hex_output(unsigned long value){
+    volatile unsigned long *hex_leds = (unsigned long *) 0x04000080;
+    *hex_leds = value;
+}
+

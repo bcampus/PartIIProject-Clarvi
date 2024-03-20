@@ -19,6 +19,7 @@ module clarvi_RegFile (
 
     
     reg [63:0] registers [0:31]; // register file - register zero is hardcoded to 0 when fetching
+    // TODO: change to 16-bit words to reduce number needed
     // however range starts at zero to allow for BRAM inference
     logic [47:0] alt_part;
     

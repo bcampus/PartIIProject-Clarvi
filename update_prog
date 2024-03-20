@@ -1,0 +1,5 @@
+#!/bin/sh
+
+quartus_cdb --64bit clarvi_fpga -c clarvi_fpga --update_mif;
+quartus_asm --read_settings_files=on --write_settings_files=off clarvi_fpga -c clarvi_fpga
+

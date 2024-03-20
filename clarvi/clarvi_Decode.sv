@@ -69,7 +69,7 @@ module clarvi_Decode (
         stall_for_memory_wait = (instr_wait && instr_read_enable)
                                 || (main_wait && (main_read_enable || main_write_enable));
                                 
-        stall_for_memory_pending = main_read_pending && !main_read_data_buffer_valid && !main_read_data_valid;
+        stall_for_memory_pending = 0 && main_read_pending && !main_read_data_buffer_valid && !main_read_data_valid;
 
         stall_for_decode = !stage_invalid && instr_part != 3;
     end

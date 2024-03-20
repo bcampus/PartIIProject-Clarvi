@@ -46,10 +46,6 @@ void vid_set_bg(int colour){
     }
 }
 
-void hex_output(unsigned long value){
-    volatile unsigned long *hex_leds = (unsigned long *) 0x04000080;
-    *hex_leds = value;
-}
 
 void set_screen_mem(unsigned long value, unsigned long offset){
     volatile unsigned long *screen = (unsigned long *) 0x08000000;
