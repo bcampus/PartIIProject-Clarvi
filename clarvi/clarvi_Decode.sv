@@ -12,8 +12,8 @@ module clarvi_Decode (
     input logic stall_stage,
 
     //Register File Inputs
-    input logic [15:0] rs1_fetched,
-    input logic [15:0] rs2_fetched,
+    input logic [ 7:0] rs1_fetched,
+    input logic [ 7:0] rs2_fetched,
 
     //Later Stage Inputs
     input logic ex_invalid,
@@ -35,21 +35,21 @@ module clarvi_Decode (
     input logic main_read_data_valid,
     
     //Forwarding Inputs
-    input logic [15:0] wb_forward_value,
-    input logic [15:0] ma_forward_value,
-    input logic [15:0] ex_forward_value,
+    input logic [ 7:0] wb_forward_value,
+    input logic [ 7:0] ma_forward_value,
+    input logic [ 7:0] ex_forward_value,
 
     output instr_t decoded_instr,
-    output logic [15:0] rs1_value,
-    output logic [15:0] rs2_value,
+    output logic [ 7:0] rs1_value,
+    output logic [ 7:0] rs2_value,
     output logic stall_for_load_dep,
     output logic stall_for_memory_wait,
     output logic stall_for_memory_pending,
     output logic stall_for_decode
 );
 
-    logic [15:0] rs1_forward, rs2_forward; // forwarding logic appears later
-    logic [ 1:0] instr_part = 0;
+    logic [ 7:0] rs1_forward, rs2_forward; // forwarding logic appears later
+    logic [ 2:0] instr_part = 0;
 
     assign rs1_value = rs1_forward;
     assign rs2_value = rs2_forward;
@@ -71,7 +71,7 @@ module clarvi_Decode (
                                 
         stall_for_memory_pending = 0 && main_read_pending && !main_read_data_buffer_valid && !main_read_data_valid;
 
-        stall_for_decode = !stage_invalid && instr_part != 3;
+        stall_for_decode = !stage_invalid && instr_part != 7;
     end
 
     always_ff @(posedge clock) begin
@@ -115,7 +115,7 @@ module clarvi_Decode (
         endcase
     end
 
-    function automatic value_source_t get_value_source(register_t reg_src, logic [1:0] instr_part);
+    function automatic value_source_t get_value_source(register_t reg_src, logic [3:0] instr_part);
         if      (could_forward_from_ex && de_ex_instr.rd == reg_src && de_ex_instr.instr_part == instr_part) return EXECUTE;
         else if (could_forward_from_ma && ex_ma_instr.rd == reg_src && ex_ma_instr.instr_part == instr_part) return MEMORY_ACCESS;
         else if (could_forward_from_wb && ma_wb_instr.rd == reg_src && ma_wb_instr.instr_part == instr_part) return WRITE_BACK;
@@ -124,7 +124,7 @@ module clarvi_Decode (
     
     // === Decode functions ====================================================
 
-    function automatic instr_t decode_instr(logic [31:0] instr, logic [63:0] pc, logic [1:0] instr_part);
+    function automatic instr_t decode_instr(logic [31:0] instr, logic [63:0] pc, logic [2:0] instr_part);
         // registers, funct7 and funct3 are in the same place in every instruction type
         decode_instr.rd  = register_t'(instr`rd);
         decode_instr.rs1 = register_t'(instr`rs1);
@@ -240,54 +240,72 @@ module clarvi_Decode (
         endcase
     endfunction
 
-    function automatic logic [16:0] decode_immediate(logic [31:0] instr, logic [1:0] instr_part);
+    function automatic logic [8:0] decode_immediate(logic [31:0] instr, logic [2:0] instr_part);
         // returns an extra top bit to indicate whether the immediate is used
         // all except u-type instructions have sign-extended immediates.
         logic [3:0] sign_ext_4 = {4{instr[31]}};
-        logic [11:0] sign_ext_12 = {12{instr[31]}};
-        logic [15:0] sign_ext_16 = {16{instr[31]}};
-        //Used for some instructions to determine whether to return sign ext.
-        logic upper = instr_part != 0; 
+        logic [7:0] sign_ext_8 = {8{instr[31]}};
         unique case (instr`opcode)
             OPC_JALR, OPC_LOAD:
-                return {1'b1, upper ? sign_ext_16 : {sign_ext_4, instr[31:20]}};
+                case (instr_part)
+                    0: return {1'b1, instr[27:20]};
+                    1: return {1'b1, sign_ext_4, instr[31:28]};
+                    default: return {1'b1, sign_ext_8};
+                endcase
             OPC_OP_IMM, OPC_OP_IMM_32: // i-type
                 unique case (instr`funct3)
-                    F3_SLL,F3_SR:
-                        return {1'b1,{sign_ext_4, instr[31:20]}};
+                    //Shifts only need lower 5 bits, but need them repeated
+                    //for all instruction parts
+                    F3_SLL,F3_SR: 
+                        return {1'b1, instr[27:20]};
                     default:
-                        return {1'b1, upper ? sign_ext_16 : {sign_ext_4, instr[31:20]}};
+                        case (instr_part)
+                            0: return {1'b1, instr[27:20]};
+                            1: return {1'b1, sign_ext_4, instr[31:28]};
+                            default: return {1'b1, sign_ext_8};
+                        endcase
                 endcase
             OPC_STORE: // s-type
-                return {1'b1, upper ? sign_ext_16 : {sign_ext_4, instr[31:25], instr[11:7]}};
+                case (instr_part)
+                    0: return {1'b1, instr[27:25], instr[11:7]};
+                    1: return {1'b1, sign_ext_4, instr[31:28]};
+                    default: return {1'b1, sign_ext_8};
+                endcase
             OPC_BRANCH: // sb-type
-                return {1'b1, upper ? sign_ext_16 : {sign_ext_4, instr[7], instr[30:25], instr[11:8], 1'b0}};
+                case (instr_part)
+                    0: return {1'b1, instr[27:25], instr[11:8], 1'b0};
+                    1: return {1'b1, sign_ext_4, instr[7], instr[30:28]};
+                    default: return {1'b1, sign_ext_8};
+                endcase
             OPC_JAL: // uj-type
                 case (instr_part)
-                    0: return {1'b1, instr[15:12], instr[20], instr[30:21], 1'b0};
-                    1: return {1'b1, sign_ext_12, instr[19:16]};
-                    default: return {1'b1, sign_ext_16};
+                    0: return {1'b1, instr[27:21], 1'b0};
+                    1: return {1'b1, instr[15:12], instr[20], instr[30:28]};
+                    2: return {1'b1, sign_ext_4, instr[19:16]};
+                    default: return {1'b1, sign_ext_8};
                 endcase
             OPC_LUI, OPC_AUIPC: // u-type
                 case (instr_part)
-                    0: return {1'b1, instr[15:12], 12'b0};
-                    1: return {1'b1, instr[31:16]};
-                    default: return {1'b1, sign_ext_16};
+                    0: return {1'b1, 8'b0};
+                    1: return {1'b1, instr[15:12], 4'b0};
+                    2: return {1'b1, instr[23:16]};
+                    3: return {1'b1, instr[31:24]};
+                    default: return {1'b1, sign_ext_8};
                 endcase
             OPC_SYSTEM: // no ordinary immediate but possibly a csr zimm (5-bit immediate)
-                return {instr[14], 16'bx};
+                return {instr[14], 8'bx};
             default: // no immediate
-                return {1'b0, 16'bx};
+                return {1'b0, 8'bx};
         endcase
 
     endfunction
 
-    function automatic logic [1:0] calculate_instr_part(operation_t op, 
+    function automatic logic [2:0] calculate_instr_part(operation_t op, 
                                                         logic is_32bit,
-                                                        logic [1:0] part);
+                                                        logic [2:0] part);
         case (op)
             SRL, SRA:
-                return is_32bit ? {part[1], ~part[0]} : ~part;
+                return is_32bit ? {part[2], ~part[1:0]} : ~part;
             SLT, SLTU, BLT, BLTU, BGE, BGEU:
                 return ~part;
             default:

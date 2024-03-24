@@ -5,8 +5,8 @@ module my_pio #(
     input clk,
     input reset_n,
 
-    input  logic [1:0]              avs_address,
-    input  logic [1:0]              avs_byteenable,
+    input  logic [3:0]              avs_address,
+    input  logic                    avs_byteenable,
     input  logic                    avs_write_n,
     input  logic [MEMORY_WIDTH-1:0] avs_writedata,
     input  logic                    avs_chipselect,
