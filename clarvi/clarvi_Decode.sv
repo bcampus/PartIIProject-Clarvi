@@ -153,11 +153,7 @@ module clarvi_Decode (
         decode_instr.instr_part = (decode_instr.op == SRL && !decode_instr.is32_bit_op
                                 || decode_instr.op == SRA && !decode_instr.is32_bit_op
                                 || decode_instr.op == SLT
-                                || decode_instr.op == SLTU
-                                || decode_instr.op == BLT
-                                || decode_instr.op == BLTU
-                                || decode_instr.op == BGE
-                                || decode_instr.op == BGEU) ? ~instr_part
+                                || decode_instr.op == SLTU) ? ~instr_part
                                                             :  instr_part;
 
         {decode_instr.immediate_used, decode_instr.immediate} = decode_immediate(instr, decode_instr.instr_part);
