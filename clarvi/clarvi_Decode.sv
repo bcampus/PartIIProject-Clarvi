@@ -306,7 +306,7 @@ module clarvi_Decode (
         case (op)
             SRL, SRA:
                 return is_32bit ? {part[2], ~part[1:0]} : ~part;
-            SLT, SLTU, BLT, BLTU, BGE, BGEU:
+            SLT, SLTU:
                 return ~part;
             default:
                 return part;
