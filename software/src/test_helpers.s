@@ -144,17 +144,14 @@ slt_ret:
 
 .global helper_loadTest
 helper_loadTest:
-    li s1, 0x04000080
-    mv s2, a0 #a0 contains the test ID
-
-    #a1 -> t0: memory location containing a3 -> t2
-    #a2 -> t1: memory location containing a4 -> t3
-    #Values loaded from a1 should sign extend 0
-    #Values loaded from a2 should sign extend 1
-    mv      t0, a1
-    mv      t1, a2
-    mv      t2, a3
-    mv      t3, a4
+    #a0 -> t0: memory location containing a2 -> t2
+    #a1 -> t1: memory location containing a3 -> t3
+    #Values loaded from a0 should sign extend 0
+    #Values loaded from a1 should sign extend 1
+    mv      t0, a0
+    mv      t1, a1
+    mv      t2, a2
+    mv      t3, a3
 
     # 64-bit test
     ld      t4, 0(t0)
