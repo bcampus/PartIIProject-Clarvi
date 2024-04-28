@@ -72,6 +72,9 @@ lui_ret:
 .global test_auipc
 test_auipc:
 
+    li s1, 0x04000080
+    mv s2, a0 #a0 contains the test ID
+
 
     #Use AUIPC and load equivalent value into t0
     AUIPC   t0,     0         
@@ -97,6 +100,9 @@ auipc_ret:
 
 .global test_slt
 test_slt:
+    li s1, 0x04000080
+    mv s2, a0 #a0 contains the test ID
+
     #unsigned t0 > t1 > t2 > t3 > t4 > zero
     #  signed t2 > t3 > t4 > zero > t0 > t1  
     li t0, 0xffffffffffffffff
@@ -143,6 +149,9 @@ slt_ret:
 
 .global helper_loadTest
 helper_loadTest:
+    li s1, 0x04000080
+    mv s2, a0 #a0 contains the test ID
+
     #a1 -> t0: memory location containing a3 -> t2
     #a2 -> t1: memory location containing a4 -> t3
     #Values loaded from a1 should sign extend 0
@@ -250,6 +259,9 @@ lTest_ret:
 
 .global helper_storeTest
 helper_storeTest:
+    li s1, 0x04000080
+    mv s2, a0 #a0 contains the test ID
+
     #a0 -> t0: memory location containing a1 -> t1
     mv      t0, a1
     mv      t1, a2
@@ -295,6 +307,9 @@ sTest_ret:
 
 .global helper_addSubTest
 helper_addSubTest:
+    li s1, 0x04000080
+    mv s2, a0 #a0 contains the test ID
+
     li t0, 0x7a547fffffffffff
     li t1, 0x15a2000000000001
     li t2, 0x8ff6800000000000
