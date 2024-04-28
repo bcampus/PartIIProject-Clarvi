@@ -51,11 +51,11 @@ module clarvi_ALU (
                 // SLT is a reverse instruction, result of comparison on the lower
                 // bits is dependant on the result of a comparison on the upper bits
                 SLT: case (instr.instr_part)
-                        3'b000: return state[0] || (state[1] && ($signed(rs1_value) < $signed(rs2_value_or_imm))); 
+                        3'b000: return state[0] || (state[1] && (rs1_value < rs2_value_or_imm)); 
                         3'b111: return {rs1_value == rs2_value, $signed(rs1_value) < $signed(rs2_value_or_imm), 8'b0};
                         //Propagates previous result if == (state[1]) not set, else recalculates == and <
                         default: return {state[1] && rs1_value == rs2_value, 
-                            (!state[1] && state[0]) || (state[1] && $signed(rs1_value) < $signed(rs2_value)), 
+                            (!state[1] && state[0]) || (state[1] && (rs1_value < rs2_value)), 
                             8'b0};
                     endcase
                 SLTU: case (instr.instr_part)
@@ -69,7 +69,16 @@ module clarvi_ALU (
                 XOR:   return rs1_value ^ rs2_value_or_imm;
                 OR:    return rs1_value | rs2_value_or_imm;
                 AND:   return rs1_value & rs2_value_or_imm;
-                SL:    return ({56'b0, rs1_value} << shift_amount) | {8'b0, (instr.instr_part != 0 ? state : 56'b0)};
+                SL:    if (instr.is32_bit_op) begin
+                        case (instr.instr_part)
+                            3'b011: begin
+                                working_result = ({ 56'b0, rs1_value } << shift_amount) | {8'b0, state};
+                                return {55'b0, working_result[7], working_result[7:0]};
+                            end
+                            default : return ({56'b0, rs1_value} << shift_amount) | {8'b0, (instr.instr_part != 0 ? state : 56'b0)};
+                        endcase
+                    end else
+                        return ({56'b0, rs1_value} << shift_amount) | {8'b0, (instr.instr_part != 0 ? state : 56'b0)};
                 SRL:   if (instr.is32_bit_op) begin //32-bit right shift is ordered with parts 3, 2, 1, 0, 7, 6, 5, 4
                     //since 32 bit does not need lower bits of state, use this
                     //to store sign ext.
@@ -82,7 +91,7 @@ module clarvi_ALU (
                             default: begin
                                 working_result = ({ rs1_value, 56'b0 } >> shift_amount) | {state, 8'b0};
                                 //places sign ext. back in bit 0 of state
-                                return {55'b0, working_result[8], working_result[63:48]};
+                                return {working_result[55:1], working_result[8], working_result[63:56]};
                             end
                         endcase
                         
@@ -102,7 +111,7 @@ module clarvi_ALU (
                             default: begin
                                 working_result = ({ rs1_value, 56'b0 } >> shift_amount) | {state, 8'b0};
                                 //places sign ext. back in bit 0 of state
-                                return {55'b0, working_result[8], working_result[63:56]};
+                                return {working_result[55:1], working_result[8], working_result[63:56]};
                             end
                         endcase
                     end else begin
