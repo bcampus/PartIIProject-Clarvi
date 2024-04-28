@@ -86,4 +86,5 @@ void test_all(){
     test("store tests:\n", test_store);
     test("ADD/SUB tests:\n", test_addSub);
     test("SLT tests:\n", test_slt);
+    test("Shift tests:\n", test_shifts);
 }
