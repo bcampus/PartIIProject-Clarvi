@@ -196,6 +196,7 @@ module clarvi #(
 
     logic [15:0] de_rs1_fetched, de_rs2_fetched;
     logic [15:0] de_rs1_value, de_rs2_value, de_ex_rs1_value, de_ex_rs2_value;
+    logic de_rs2_part_override;
     instr_t      de_instr, de_ex_instr;
 
     //defined to allow referencing of later defined vars
@@ -239,6 +240,7 @@ module clarvi #(
         .ex_forward_value               (ex_forward_value),
 
         .decoded_instr                  (de_instr),
+        .rs2_part_override              (de_rs2_part_override),
         .rs1_value                      (de_rs1_value),
         .rs2_value                      (de_rs2_value),
         .stall_for_load_dep             (stall_for_load_dep),
@@ -441,6 +443,7 @@ module clarvi #(
     clarvi_RegFile RegisterFile (
         .clock              (clock),
         .fetch_part         (de_instr.instr_part),
+        .rs2_part_override  (de_rs2_part_override),
         .fetch_register_1   (de_instr.rs1),
         .fetch_register_2   (de_instr.rs2),
         .write_part         (ma_wb_instr.instr_part),
