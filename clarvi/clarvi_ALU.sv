@@ -58,8 +58,8 @@ module clarvi_ALU (
                 XOR:   return rs1_value ^ rs2_value_or_imm;
                 OR:    return rs1_value | rs2_value_or_imm;
                 AND:   return rs1_value & rs2_value_or_imm;
-                SL:    if (instr.is32_bit_op) begin
-                        working_result = ({ 32'b0, rs1_value } << shift_amount) | {32'b0, state};
+                SL:    if (instr.is32_bit_op) begin//know that must be in part 0
+                        working_result = { 32'b0, rs1_value } << shift_amount;
                         return {31'b0, working_result[31], working_result[31:0]};
                     end else
                         return ({32'b0, rs1_value} << shift_amount) | {32'b0, (instr.instr_part != 0 ? state : 32'b0)};
