@@ -5,6 +5,7 @@
 module clarvi_RegFile (
    input logic clock, 
    input logic fetch_part,
+   input logic rs2_part_override,
    input logic [4:0] fetch_register_1,
    input logic [4:0] fetch_register_2,
 
@@ -24,7 +25,7 @@ module clarvi_RegFile (
     
     always_comb begin
         data_out_1 = get_register_part(fetch_register_1, fetch_part);
-        data_out_2 = get_register_part(fetch_register_2, fetch_part);
+        data_out_2 = get_register_part(fetch_register_2, rs2_part_override ? 0 : fetch_part);
         alt_part = get_register_part(write_register, !write_part);
         debug_register28 = registers[28];
     end

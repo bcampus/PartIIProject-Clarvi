@@ -48,7 +48,7 @@ module clarvi_ALU (
                 // SLT is a reverse instruction, result of comparison on the lower
                 // bits is dependant on the result of a comparison on the upper bits
                 SLT:   case (instr.instr_part)
-                        1'b0: return state[0] || (state[1] && ($signed(rs1_value) < $signed(rs2_value_or_imm))); 
+                        1'b0: return state[0] || (state[1] && (rs1_value < rs2_value_or_imm)); 
                         1'b1: return {rs1_value == rs2_value, $signed(rs1_value) < $signed(rs2_value_or_imm), 32'b0};
                     endcase
                 SLTU:  case (instr.instr_part)
@@ -58,7 +58,11 @@ module clarvi_ALU (
                 XOR:   return rs1_value ^ rs2_value_or_imm;
                 OR:    return rs1_value | rs2_value_or_imm;
                 AND:   return rs1_value & rs2_value_or_imm;
-                SL:    return ({32'b0, rs1_value} << shift_amount) | {32'b0, (instr.instr_part != 0 ? state : 32'b0)};
+                SL:    if (instr.is32_bit_op) begin
+                        working_result = ({ 32'b0, rs1_value } << shift_amount) | {32'b0, state};
+                        return {31'b0, working_result[31], working_result[31:0]};
+                    end else
+                        return ({32'b0, rs1_value} << shift_amount) | {32'b0, (instr.instr_part != 0 ? state : 32'b0)};
                 SRL:   case (instr.instr_part)
                         1'b1: begin
                             working_result = { rs1_value, 32'b0 } >> shift_amount;

@@ -40,6 +40,7 @@ module clarvi_Decode (
     input logic [31:0] ex_forward_value,
 
     output instr_t decoded_instr,
+    output logic rs2_part_override,
     output logic [31:0] rs1_value,
     output logic [31:0] rs2_value,
     output logic stall_for_load_dep,
@@ -56,6 +57,8 @@ module clarvi_Decode (
 
     always_comb begin
         decoded_instr = decode_instr(in_instr, if_de_pc, instr_part);
+
+        rs2_part_override = is_shift(in_instr);
 
         // if the next instruction is a load and this instruction is dependent on its result,
         // stall for one cycle since the result won't be ready yet - unless the load raises an exception.
@@ -273,6 +276,18 @@ module clarvi_Decode (
                 return {1'b0, 32'bx};
         endcase
 
+    endfunction
+
+    function automatic logic is_shift(logic [31:0] instr);
+        logic [2:0]  funct3  = instr`funct3;
+        unique case (instr`opcode)
+            OPC_OP_32, OPC_OP_IMM_32, OPC_OP, OPC_OP_IMM:
+                unique case (funct3)
+                    F3_SLL, F3_SR:   return 1;
+                    default: return 0;
+                endcase
+            default: return 0;
+        endcase
     endfunction
 
     function automatic logic validate_csr_op(logic write, csr_t csr);
