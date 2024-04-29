@@ -38,8 +38,8 @@ module clarvi_ALU (
                 ADD,SUB: 
                     if (instr.is32_bit_op) begin //Use bit 32 to propagate sign ext.
                         working_result = {32'b0, rs1_value} 
-                                    + {32'b0, ~rs2_value_or_imm} 
-                                    + (instr.op == SUB);
+                                    + {32'b0, instr.op == SUB ? ~rs2_value_or_imm : rs2_value_or_imm} 
+                                    + (instr.op == SUB);//if is 32-bit op, we know this is part 0
                         return { 31'b0, working_result[31], working_result[31:0] }; //sets sign ext. bit
                     end
                     else return {32'b0, rs1_value} 
