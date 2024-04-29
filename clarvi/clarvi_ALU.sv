@@ -35,18 +35,15 @@ module clarvi_ALU (
         if (instr.is32_bit_op && instr.instr_part > 1 ) return {17{state[0]}};
         else begin
             unique case (instr.op)
-                ADD: if (instr.is32_bit_op) begin //Use bit 16 to propagate sign ext.
-                        working_result = {48'b0, rs1_value} + {48'b0, rs2_value_or_imm} + (instr.instr_part != 0 && state[0]);
-                        //sets sign ext. bit if doing upper bit of calculation
-                        return { 47'b0, instr.instr_part == 1 ? working_result[15] : working_result[16], working_result[15:0] }; 
+                ADD,SUB: begin
+                        working_result = {48'b0, rs1_value} 
+                            + {48'b0, instr.op == SUB ? ~rs2_value_or_imm : rs2_value_or_imm} 
+                            + (instr.instr_part == 0 ? instr.op == SUB : state[0]); 
+
+                        return { 47'b0, 
+                            (instr.is32_bit_op && instr.instr_part == 1) ? working_result[15] : working_result[16],
+                            working_result[15:0] }; 
                     end
-                    else return {48'b0, rs1_value} + {48'b0, rs2_value_or_imm} + (instr.instr_part != 0 && state[0]);
-                SUB: if (instr.is32_bit_op) begin //Use bit 16 to propagate sign ext.
-                        working_result = {48'b0, rs1_value} + {48'b0, ~rs2_value_or_imm} + (instr.instr_part == 0 || state[0]);
-                        //sets sign ext. bit if doing upper bit of calculation
-                        return { 47'b0, instr.instr_part == 1 ? working_result[15] : working_result[16], working_result[15:0] }; 
-                    end
-                    else return {32'b0, rs1_value} + {32'b0, ~rs2_value_or_imm} + (instr.instr_part == 0 || state[0]);
                 // SLT is a reverse instruction, result of comparison on the lower
                 // bits is dependant on the result of a comparison on the upper bits
                 SLT: case (instr.instr_part)
