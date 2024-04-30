@@ -57,31 +57,25 @@ module clarvi_ALU (
                 OR:    return rs1_value | rs2_value_or_imm;
                 AND:   return rs1_value & rs2_value_or_imm;
                 SL:    if (instr.is32_bit_op) begin//know that must be in part 0
-                        working_result = { 32'b0, rs1_value } << shift_amount;
-                        return {31'b0, working_result[31], working_result[31:0]};
-                    end else
-                        return ({32'b0, rs1_value} << shift_amount) | {32'b0, (instr.instr_part != 0 ? state : 32'b0)};
-                SRL:   case (instr.instr_part)
+                            working_result = { 32'b0, rs1_value } << shift_amount;
+                            return {31'b0, working_result[31], working_result[31:0]};
+                        end else
+                            return ({32'b0, rs1_value} << shift_amount) | {32'b0, (instr.instr_part != 0 ? state : 32'b0)};
+                SRL, SRA: case (instr.instr_part)
                         1'b1: begin
-                            working_result = { rs1_value, 32'b0 } >> shift_amount;
+                            if (instr.op == SRL)
+                                working_result = { rs1_value, 32'b0 } >> shift_amount;
+                            else
+                                working_result = $signed({ rs1_value, 32'b0 }) >>> shift_amount ;
+                            //Rearrange bits so state is in correct bits
                             return { working_result[31:0], working_result[63:32] };
                         end
                         1'b0: begin
                             if (instr.is32_bit_op) begin
-                                working_result = { 32'b0, rs1_value >> shift_amount };
-                                return { 31'b0, working_result[31], working_result[31:0] }; //sets sign ext. bit
-                            end
-                            else return {32'b0, state | (rs1_value >> shift_amount) }; //combine with underflow from upper bits
-                        end
-                    endcase
-                SRA:   case (instr.instr_part)
-                        1'b1: begin
-                            working_result = $signed({ rs1_value, 32'b0 }) >>> shift_amount ;
-                            return { working_result[31:0], working_result[63:32] };
-                        end
-                        1'b0: begin
-                            if (instr.is32_bit_op) begin
-                                working_result = { 32'b0, $signed(rs1_value) >>> shift_amount };
+                                if (instr.op == SRL)
+                                    working_result = { rs1_value >> shift_amount };
+                                else
+                                    working_result = { $signed(rs1_value) >>> shift_amount };
                                 return { 31'b0, working_result[31], working_result[31:0] }; //sets sign ext. bit
                             end
                             else return {32'b0, state | (rs1_value >> shift_amount) }; //combine with underflow from upper bits
