@@ -47,7 +47,7 @@ module clarvi_ALU (
                 // bits is dependant on the result of a comparison on the upper bits
                 SLT:   case (instr.instr_part)
                         1'b0: return state[0] || (state[1] && (rs1_value < rs2_value_or_imm)); 
-                        1'b1: return {rs1_value == rs2_value, $signed(rs1_value) < $signed(rs2_value_or_imm), 32'b0};
+                        1'b1: return {rs1_value == rs2_value_or_imm, $signed(rs1_value) < $signed(rs2_value_or_imm), 32'b0};
                     endcase
                 SLTU:  case (instr.instr_part)
                         1'b0: return state[0] || (state[1] && (rs1_value < rs2_value_or_imm));
