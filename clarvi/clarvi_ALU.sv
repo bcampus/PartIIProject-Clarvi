@@ -65,22 +65,23 @@ module clarvi_ALU (
                 XOR:   return rs1_value ^ rs2_value_or_imm;
                 OR:    return rs1_value | rs2_value_or_imm;
                 AND:   return rs1_value & rs2_value_or_imm;
-                SL:    if (instr.is32_bit_op) begin
-                        case (instr.instr_part)
-                            3'b01: begin
-                                working_result = ({ 48'b0, rs1_value } << shift_amount) | {16'b0, state};
-                                return {47'b0, working_result[15], working_result[15:0]};
-                            end
-                            default : return ({48'b0, rs1_value} << shift_amount) | {16'b0, (instr.instr_part != 0 ? state : 48'b0)};
-                        endcase
-                    end else
-                        return ({56'b0, rs1_value} << shift_amount) | {8'b0, (instr.instr_part != 0 ? state : 56'b0)};
-                SRL:   if (instr.is32_bit_op) begin //32-bit right shift is ordered with parts 1, 0, 3, 2
+                SL: begin
+                    working_result = ({48'b0, rs1_value} << shift_amount) | {16'b0, (instr.instr_part != 0 ? state : 48'b0)};
+                    if (instr.is32_bit_op && instr.instr_part == 2'b01) 
+                        return {47'b0, working_result[15], working_result[15:0]};
+                    else    
+                        return working_result;
+                end
+                SRL, SRA:   
+                    if (instr.is32_bit_op) begin //32-bit right shift is ordered with parts 1, 0, 3, 2
                     //since 32 bit does not need lower bits of state, use this
                     //to store sign ext.
                         case (instr.instr_part)
                             2'b01: begin
-                                working_result = { rs1_value, 48'b0 } >> shift_amount;
+                                if (instr.op == SRL)
+                                    working_result = { rs1_value, 48'b0 } >> shift_amount;
+                                else
+                                    working_result = $signed({ rs1_value, 48'b0 }) >>> shift_amount;
                                 //places sign ext. in bit 0 of state
                                 return {working_result[47:1], working_result[63], working_result[63:48]};
                             end
@@ -90,35 +91,13 @@ module clarvi_ALU (
                                 return {working_result[47:1], working_result[16], working_result[63:48]};
                             end
                         endcase
-                        
                     end else begin
-                        working_result = ({ rs1_value, 48'b0 } >> shift_amount) | {(instr.instr_part != 3 ? state : 48'b0), 16'b0};
-                        return { working_result[47:0], working_result[63:48] };
-                    end
-                SRA:   if (instr.is32_bit_op) begin //32-bit right shift is ordered with parts 1, 0, 3, 2
-                    //since 32 bit does not need lower bits of state, use this
-                    //to store sign ext.
-                        case (instr.instr_part)
-                            2'b01: begin
-                                working_result = $signed({ rs1_value, 48'b0 }) >>> shift_amount;
-                                //places sign ext. in bit 0 of state
-                                return {working_result[47:1], working_result[63], working_result[63:48]};
-                            end
-                            2'b00: begin
-                                working_result = ({ rs1_value, 48'b0 } >> shift_amount) | {state, 16'b0};
-                                //places sign ext. back in bit 0 of state
-                                return {working_result[47:1], working_result[16], working_result[63:48]};
-                            end
-                        endcase
-                        
-                    end else begin
-                        if (instr.instr_part == 2'b11) begin
+                        if (instr.op == SRA && instr.instr_part == 3)
                             working_result = $signed({ rs1_value, 48'b0 }) >>> shift_amount;
-                            return { working_result[47:0], working_result[63:48] };
-                        end else begin
-                            working_result = ({ rs1_value, 48'b0 } >> shift_amount) |  { state, 16'b0 };
-                            return { working_result[47:0], working_result[63:48] };
-                        end
+                        else
+                            working_result = ({ rs1_value, 48'b0 } >> shift_amount) 
+                                | {(instr.instr_part != 3 ? state : 48'b0), 16'b0};
+                        return { working_result[47:0], working_result[63:48] };
                     end
                 LUI:   return instr.immediate;
                 AUIPC: case (instr.instr_part)
