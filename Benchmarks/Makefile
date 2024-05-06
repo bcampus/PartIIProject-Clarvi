@@ -42,7 +42,7 @@ OBJCOPY = $(RISCV_PREFIX)objcopy
 OBJDUMP = $(RISCV_PREFIX)objdump
 
 TARGET_ARCH = -mabi=lp64 -march=rv64i_zicsr
-CCFLAGS = -O3 $(TARGET_ARCH)
+CCFLAGS = -O1 $(TARGET_ARCH)
 
 # Lists of rules: the name of a file, followed by the files it depends on.
 # When typing 'make' not followed by a rule name, the first rule is followed.  This rule depends on
