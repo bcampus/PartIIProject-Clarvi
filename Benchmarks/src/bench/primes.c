@@ -5,29 +5,6 @@
 
 DTYPE arr[N];
 
-void initArray(){
-    for (char i = 0; i < N; i++){
-        arr[i] = (DTYPE) N - i;
-    }
-}
-
-void bubbleSort(){
-    char sorted = 0;
-    char count = 0;
-    while (!sorted) {
-        sorted = 1;
-        for (char i = 1; i < N - count; i++){
-            if (arr[i-1] <= arr[i]) continue;
-            sorted = 0;
-            DTYPE tmp = arr[i-1];
-            arr[i-1]=arr[i];
-            arr[i] = tmp;
-        }
-        count++;
-        dprint_intvar("count: ", count);
-    }
-}
-
 DTYPE mod(DTYPE a, DTYPE b){
     while (a >= b) a -= b;
     return a;
