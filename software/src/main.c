@@ -1,6 +1,5 @@
 #include "tests.h"
 #include "types.h"
-#include "bubbleSort.h"
 #include "debug.h"
 
 
@@ -67,8 +66,6 @@ int main(void) {
     //dprint_intvar("x", x);
     //x = mult(x, x);
     //dprint_intvar("x^2", x);
-
-    bubbleSortBenchMark();
     
     /*
     char r = 255;
