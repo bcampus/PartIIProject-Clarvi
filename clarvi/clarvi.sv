@@ -187,7 +187,7 @@ module clarvi #(
         if (if_prev_part == 3 && stall_if)
             instr_read_data_buffer <= instr_read_data;
 
-        if (!stall_if && (if_stall_on_prev || if_prev_part == 3)) begin
+        if (!stall_if && ((if_fetch_part == 0 && if_stall_on_prev)  || if_prev_part == 3)) begin
             // if there was a stall on the last cycle, we read from the instruction buffer not the bus.
             // this allows the PC to 'catch up' on the next cycle.
             if_de_instr <= { if_prev_part == 3 ? instr_read_data : instr_read_data_buffer, 
