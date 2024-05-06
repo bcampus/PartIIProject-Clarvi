@@ -10,3 +10,6 @@ clarvi_soc/
 db/
 incremental_db/
 output_files
+*.qws
+*.tcl~
+dse/
