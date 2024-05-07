@@ -1,4 +1,4 @@
-software/build/
+*/build/
 transcript
 vish_stacktrace.vstf
 vsim.wlf
@@ -12,3 +12,4 @@ incremental_db/
 output_files
 *.qws
 *.tcl~
+dse/
