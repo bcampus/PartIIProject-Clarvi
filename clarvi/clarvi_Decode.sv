@@ -65,7 +65,7 @@ module clarvi_Decode (
         stall_for_load_dep = !stage_invalid && !ex_invalid && de_ex_instr.memory_read && !mem_address_error 
                           && (decoded_instr.rs1 == de_ex_instr.rd && decoded_instr.rs1_used
                            || decoded_instr.rs2 == de_ex_instr.rd && decoded_instr.rs2_used)
-                          && decoded_instr.instr_part == 0;
+                          && decoded_instr.instr_part == de_ex_instr.instr_part;
 
         // ignore waitrequest unless we are actually reading/writing memory,
         // because the bus is allowed to hold waitrequest high while idle.
