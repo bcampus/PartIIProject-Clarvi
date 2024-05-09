@@ -59,7 +59,6 @@ int test_store(int id){
     *x_ptr = 0x08192a4b4c5d6e7f;
 
     return helper_storeTest(id, x_ptr, x);
-    
 }
 
 int test_addSub(int id){

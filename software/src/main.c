@@ -59,15 +59,7 @@ int mult(int a, int b){
     return result;
 }
 
-int main(void) {
-    //test("load test", test_load);
-    test_all();
-    //dprint_str("Mult tst:\n");
-    //dprint_intvar("x", x);
-    //x = mult(x, x);
-    //dprint_intvar("x^2", x);
-    
-    /*
+void ScreenTest(){
     char r = 255;
     char g = 255;
     char b = 0;
@@ -96,6 +88,10 @@ int main(void) {
         }
         
     }
-    */
-    
+}
+
+int main(void) {
+    test_all();
+
+    ScreenTest();
 }
