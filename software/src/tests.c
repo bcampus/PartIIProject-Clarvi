@@ -38,9 +38,15 @@ int test_shifts(int id){
 }
 
 int test_load(int id){
+<<<<<<< HEAD
     
     long x1 = 0x0; 
     long x2 = 0x0; 
+=======
+
+    long x1 = 0x0;
+    long x2 = 0x0;
+>>>>>>> 528dc5a (Clean tests)
     long *x1_ptr = &x1;
     long *x2_ptr = &x2;
 
@@ -59,7 +65,6 @@ int test_store(int id){
     *x_ptr = 0x08192a4b4c5d6e7f;
 
     return helper_storeTest(id, x_ptr, x);
-    
 }
 
 int test_addSub(int id){
@@ -85,7 +90,6 @@ void test_all(){
     test(3, "ADD/SUB tests:\n", test_addSub);
     test(4, "load tests:\n", test_load);
     test(5, "store tests:\n", test_store);
-    test(6, "ADD/SUB tests:\n", test_addSub);
-    test(7, "SLT tests:\n", test_slt);
-    test(8, "Shift tests:\n", test_shifts);
+    test(6, "SLT tests:\n", test_slt);
+    test(7, "Shift tests:\n", test_shifts);
 }
