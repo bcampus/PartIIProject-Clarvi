@@ -37,9 +37,6 @@ module clarvi_MMU #(
     logic [15:0] write_data_lower [0:2];
 
     always_comb begin
-        main_read_enable  = !stage_invalid && !interrupt && !mem_address_error && instr.memory_read && !stall_for_memory_pending && instr.instr_part == 3;
-        main_write_enable = !stage_invalid && !interrupt && !mem_address_error && instr.memory_write && !stall_for_memory_pending && instr.instr_part == 3;
-
         // do address calculation, using bit 32 to propagate carry between
         // adds
         case (instr.instr_part)
@@ -54,6 +51,9 @@ module clarvi_MMU #(
         // our memory is word addressed, so cut off the bottom two bits (this becomes the word offset),
         // and the higher bits beyond our address range which should be 0.
         {address_high_bits, main_address, word_offset} = mem_address + access_part * 2;
+
+        main_read_enable  = !stage_invalid && !interrupt && !mem_address_error && instr.memory_read && !stall_for_memory_pending && instr.instr_part == 3;
+        main_write_enable = !stage_invalid && !interrupt && !mem_address_error && instr.memory_write && !stall_for_memory_pending && instr.instr_part == 3 && address_high_bits == 0;
 
         // set byte_enable mask according to whether we are loading/storing a word, half word or byte.
         main_byte_enable = compute_byte_enable(instr.memory_width, word_offset, access_part);
