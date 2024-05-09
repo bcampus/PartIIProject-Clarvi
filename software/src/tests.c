@@ -38,15 +38,9 @@ int test_shifts(int id){
 }
 
 int test_load(int id){
-<<<<<<< HEAD
     
     long x1 = 0x0; 
     long x2 = 0x0; 
-=======
-
-    long x1 = 0x0;
-    long x2 = 0x0;
->>>>>>> 528dc5a (Clean tests)
     long *x1_ptr = &x1;
     long *x2_ptr = &x2;
 
