@@ -40,9 +40,6 @@ module clarvi_MMU #(
         // and the higher bits beyond our address range which should be 0.
         {address_high_bits, main_address, word_offset} = mem_address;
 
-        main_read_enable  = !stage_invalid && !interrupt && !mem_address_error && instr.memory_read && !stall_for_memory_pending && instr.instr_part == 7;
-        main_write_enable = !stage_invalid && !interrupt && !mem_address_error && instr.memory_write && !stall_for_memory_pending && instr.instr_part == 7 && address_high_bits == 0;
-
         // set byte_enable mask according to whether we are loading/storing a word, half word or byte.
         main_byte_enable = compute_byte_enable(instr.memory_width, word_offset);
 
@@ -57,7 +54,7 @@ module clarvi_MMU #(
 `endif
 
         main_read_enable  = !stage_invalid && !interrupt && !mem_address_error && instr.memory_read && !stall_for_memory_pending;
-        main_write_enable = !stage_invalid && !interrupt && !mem_address_error && instr.memory_write && !stall_for_memory_pending;
+        main_write_enable = !stage_invalid && !interrupt && !mem_address_error && instr.memory_write && !stall_for_memory_pending && address_high_bits == 0;
     end
 
     always_ff @(posedge clock)
