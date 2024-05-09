@@ -9,6 +9,9 @@
 
 .macro  ASSERT          r1, r2, err_val
     li      a0, \err_val # return value if test fails
+    addi    s3, s2, \err_val
+    
+    sw s3, 0(s1)
 
     DEBUG_PRINT \r1 
     DEBUG_PRINT \r2
@@ -41,6 +44,8 @@
 .global test_lui
 test_lui:
 
+    li s1, 0x04000080
+    mv s2, a0 #a0 contains the test ID
 
     lui     t0, 0x80000
 
@@ -138,14 +143,18 @@ slt_ret:
 
 .global helper_loadTest
 helper_loadTest:
-    #a0 -> t0: memory location containing a2 -> t2
-    #a1 -> t1: memory location containing a3 -> t3
-    #Values loaded from a0 should sign extend 0
-    #Values loaded from a1 should sign extend 1
-    mv      t0, a0
-    mv      t1, a1
-    mv      t2, a2
-    mv      t3, a3
+    li s1, 0x04000080
+    mv s2, a0 #a0 contains the test ID
+
+    #a1 -> t0: memory location containing a3 -> t2
+    #a2 -> t1: memory location containing a4 -> t3
+    #Values loaded from a1 should sign extend 0
+    #Values loaded from a2 should sign extend 1
+    mv      t0, a1
+    mv      t1, a2
+    mv      t2, a3
+    mv      t3, a4
+
 
 
     # 64-bit test
@@ -246,8 +255,8 @@ lTest_ret:
 .global helper_storeTest
 helper_storeTest:
     #a0 -> t0: memory location containing a1 -> t1
-    mv      t0, a0
-    mv      t1, a1
+    mv      t0, a1
+    mv      t1, a2
 
 
     # 8-bit test

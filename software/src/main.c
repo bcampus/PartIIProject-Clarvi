@@ -1,6 +1,5 @@
 #include "tests.h"
 #include "types.h"
-#include "bubbleSort.h"
 #include "debug.h"
 
 
@@ -64,17 +63,7 @@ int mult(int a, int b){
     return result;
 }
 
-int main(void) {
-    //test(test_shifts);
-    test_all();
-    //dprint_str("Mult tst:\n");
-    //dprint_intvar("x", x);
-    //x = mult(x, x);
-    //dprint_intvar("x^2", x);
-    dprint_str("Hello world");
-
-    bubbleSortBenchMark();
-    unsigned long counter = 0x0;
+void ScreenTest(){
     char r = 255;
     char g = 0;
     char b = 0;
@@ -100,4 +89,10 @@ int main(void) {
             x=mult(i,i);
         }
     }
+}
+
+int main(void) {
+    test_all();
+
+    ScreenTest();
 }
